@@ -13,6 +13,7 @@ const demoUser = {
   name: "Demo User",
   password: "123456",
   plan: "free",
+  role: "admin",
   language: "en",
 };
 
@@ -62,6 +63,7 @@ const seed = async () => {
         name: demoUser.name,
         password: hashedPassword,
         plan: demoUser.plan,
+        role: demoUser.role,
         language: demoUser.language,
       },
       $setOnInsert: {

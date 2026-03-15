@@ -15,6 +15,7 @@ const sanitizeUser = (userDoc) => ({
   email: userDoc.email,
   name: userDoc.name || "",
   plan: userDoc.plan || "free",
+  role: userDoc.role || "user",
   language: userDoc.language || "en",
   preferredLanguage: userDoc.language || "en",
 });
@@ -25,6 +26,7 @@ const buildToken = (userDoc) =>
       id: String(userDoc._id),
       email: userDoc.email,
       plan: userDoc.plan || "free",
+      role: userDoc.role || "user",
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }

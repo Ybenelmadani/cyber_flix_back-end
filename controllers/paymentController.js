@@ -65,6 +65,7 @@ const mockUpgradePremium = async (req, res) => {
         email: user.email,
         name: user.name || "",
         plan: user.plan || "free",
+        role: user.role || "user",
         language: user.language || "en",
         preferredLanguage: user.language || "en",
       },
