@@ -3,12 +3,17 @@ const axios = require("axios");
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BASE_URL = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
 const DEFAULT_LANGUAGE = process.env.TMDB_LANGUAGE_DEFAULT || "en-US";
+const TMDB_TIMEOUT_MS = Number(process.env.TMDB_TIMEOUT_MS) || 20000;
+const TMDB_RETRY_COUNT = Number(process.env.TMDB_RETRY_COUNT) || 1;
+const TMDB_CACHE_TTL_MS = Number(process.env.TMDB_CACHE_TTL_MS) || 60000;
 const ALLOWED_LANGUAGES = new Set(["en-US", "fr-FR", "ar-SA"]);
+const tmdbCache = new Map();
+const tmdbInFlight = new Map();
 
 // Ignore broken system proxy settings for direct TMDB calls.
 const tmdbClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: TMDB_TIMEOUT_MS,
   proxy: false,
 });
 
@@ -19,20 +24,115 @@ const getRequestLanguage = (req) => {
 
 const getRequestPage = (req) => req.query.page || 1;
 
-const tmdbGet = async (path, { req, extraParams = {} } = {}) => {
-  const language = getRequestLanguage(req);
-  return tmdbClient.get(path, {
-    params: {
-      api_key: TMDB_API_KEY,
-      language,
-      ...extraParams,
-    },
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildCacheKey = (path, params) => {
+  const query = new URLSearchParams();
+
+  Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .forEach(([key, value]) => {
+      query.append(key, String(value));
+    });
+
+  return `${path}?${query.toString()}`;
+};
+
+const getCachedValue = (cacheKey) => {
+  const cachedEntry = tmdbCache.get(cacheKey);
+
+  if (!cachedEntry) {
+    return null;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    tmdbCache.delete(cacheKey);
+    return null;
+  }
+
+  return cachedEntry.data;
+};
+
+const setCachedValue = (cacheKey, data) => {
+  tmdbCache.set(cacheKey, {
+    data,
+    expiresAt: Date.now() + TMDB_CACHE_TTL_MS,
   });
 };
 
+const isRetryableTmdbError = (error) => {
+  const status = error.response?.status;
+
+  return (
+    error.code === "ECONNABORTED" ||
+    error.code === "ECONNRESET" ||
+    error.code === "ETIMEDOUT" ||
+    (typeof error.message === "string" && error.message.toLowerCase().includes("timeout")) ||
+    status === 429 ||
+    (typeof status === "number" && status >= 500)
+  );
+};
+
+const fetchTmdb = async (path, params) => {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      return await tmdbClient.get(path, { params });
+    } catch (error) {
+      if (attempt >= TMDB_RETRY_COUNT || !isRetryableTmdbError(error)) {
+        throw error;
+      }
+
+      attempt += 1;
+      await sleep(400 * attempt);
+    }
+  }
+};
+
+const tmdbGet = async (path, { req, extraParams = {}, includeLanguage = true } = {}) => {
+  const params = {
+    api_key: TMDB_API_KEY,
+    ...(includeLanguage ? { language: getRequestLanguage(req) } : {}),
+    ...extraParams,
+  };
+  const cacheKey = buildCacheKey(path, params);
+  const cachedData = getCachedValue(cacheKey);
+
+  if (cachedData) {
+    return { data: cachedData };
+  }
+
+  const inFlightRequest = tmdbInFlight.get(cacheKey);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const requestPromise = fetchTmdb(path, params)
+    .then((response) => {
+      setCachedValue(cacheKey, response.data);
+      return { data: response.data };
+    })
+    .finally(() => {
+      tmdbInFlight.delete(cacheKey);
+    });
+
+  tmdbInFlight.set(cacheKey, requestPromise);
+  return requestPromise;
+};
+
 const sendTmdbError = (res, message, error) => {
-  console.error("TMDB error:", error.message);
-  res.status(500).json({
+  console.error("TMDB error:", {
+    message: error.message,
+    code: error.code,
+    status: error.response?.status,
+    url: error.config?.url,
+  });
+
+  const statusCode = error.code === "ECONNABORTED" ? 504 : 500;
+
+  res.status(statusCode).json({
     success: false,
     message,
     error: error.message,
@@ -189,6 +289,22 @@ const getTvSeasonDetails = async (req, res) => {
   }
 };
 
+const getTvEpisodeDetails = async (req, res) => {
+  try {
+    const { id, seasonNumber, episodeNumber } = req.params;
+    const response = await tmdbGet(
+      `/tv/${id}/season/${seasonNumber}/episode/${episodeNumber}`,
+      {
+        req,
+        extraParams: { append_to_response: "credits,videos,images" },
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    sendTmdbError(res, "Unable to fetch episode details", error);
+  }
+};
+
 const getTvByGenre = async (req, res) => {
   try {
     const response = await tmdbGet("/discover/tv", {
@@ -245,8 +361,9 @@ const getOnTheAirTvShows = async (req, res) => {
 
 const getMovieWatchProviders = async (req, res) => {
   try {
-    const response = await tmdbClient.get(`/movie/${req.params.id}/watch/providers`, {
-      params: { api_key: TMDB_API_KEY },
+    const response = await tmdbGet(`/movie/${req.params.id}/watch/providers`, {
+      extraParams: {},
+      includeLanguage: false,
     });
     res.json(response.data);
   } catch (error) {
@@ -256,8 +373,9 @@ const getMovieWatchProviders = async (req, res) => {
 
 const getTvWatchProviders = async (req, res) => {
   try {
-    const response = await tmdbClient.get(`/tv/${req.params.id}/watch/providers`, {
-      params: { api_key: TMDB_API_KEY },
+    const response = await tmdbGet(`/tv/${req.params.id}/watch/providers`, {
+      extraParams: {},
+      includeLanguage: false,
     });
     res.json(response.data);
   } catch (error) {
@@ -278,6 +396,7 @@ module.exports = {
   searchTvShows,
   getTvDetails,
   getTvSeasonDetails,
+  getTvEpisodeDetails,
   getTvByGenre,
   getTvGenres,
   getTrendingTvShows,

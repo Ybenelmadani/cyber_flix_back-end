@@ -341,4 +341,50 @@ ISC
 
 ---
 
+## Protected HLS Server
+
+This project now includes a protected HLS file server for local streaming tests.
+
+### Start the API
+
+```bash
+npm run dev
+```
+
+### Start the protected stream server
+
+```bash
+npm run stream:dev
+```
+
+### Required env
+
+```env
+STREAM_BASE_URL=http://localhost:8080
+STREAM_PORT=8080
+STREAM_VIDEO_ROOT=./storage/videos
+STREAM_SIGNING_SECRET=change-this-to-a-long-random-secret-too
+STREAM_URL_TTL_MINUTES=30
+```
+
+### How it works
+
+- The API signs `/videos/...` playback URLs.
+- `stream-server.js` verifies `expires` and `token`.
+- For `.m3u8` playlists, the server rewrites child playlist and segment URLs so HLS requests stay signed.
+
+### Demo files
+
+A local demo fixture is included in:
+
+```text
+storage/videos/demo/
+```
+
+The signed demo master playlist path is:
+
+```text
+/videos/demo/master.m3u8
+```
+
 **Créé pour CYBERFLIX** 🎬

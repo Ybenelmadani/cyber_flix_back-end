@@ -4,8 +4,8 @@ const connectDb = require("../config/db");
 const Stream = require("../models/Stream");
 
 const DEMO_SOURCE = {
-  quality: "720p",
   url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+  quality: "720p",
   type: "hls",
   language: "VO",
   isPremium: false,
@@ -18,11 +18,54 @@ const toKey = (value) =>
     .replace(/[^A-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
-const buildSource = (name, urlOverride) => ({
-  ...DEMO_SOURCE,
-  name,
-  url: urlOverride || DEMO_SOURCE.url,
-});
+const buildSource = (name, sourceOverride = "") => {
+  const trimmedOverride = String(sourceOverride || "").trim();
+
+  if (!trimmedOverride) {
+    return {
+      ...DEMO_SOURCE,
+      name,
+    };
+  }
+
+  if (/^https?:\/\//i.test(trimmedOverride)) {
+    return {
+      name,
+      quality: DEMO_SOURCE.quality,
+      url: trimmedOverride,
+      type: trimmedOverride.includes(".m3u8") ? "hls" : "mp4",
+      language: DEMO_SOURCE.language,
+      isPremium: DEMO_SOURCE.isPremium,
+    };
+  }
+
+  const muxMatch = trimmedOverride.match(/^mux:(.+)$/i);
+  if (muxMatch) {
+    return {
+      ...DEMO_SOURCE,
+      name,
+      provider: "mux",
+      playbackId: muxMatch[1].trim(),
+    };
+  }
+
+  const cloudflareMatch = trimmedOverride.match(/^cloudflare:(.+)$/i);
+  if (cloudflareMatch) {
+    return {
+      ...DEMO_SOURCE,
+      name,
+      provider: "cloudflare",
+      playbackId: cloudflareMatch[1].trim(),
+    };
+  }
+
+  return {
+    ...DEMO_SOURCE,
+    name,
+    playbackId: trimmedOverride,
+    url: "",
+  };
+};
 
 const getMovieUrlOverride = (title) => {
   const envKey = `STREAM_${toKey(title)}_URL`;
@@ -109,9 +152,9 @@ async function run() {
     console.log("- Wednesday");
     console.log("");
     console.log("Optional environment overrides:");
-    console.log("- STREAM_INTERSTELLAR_URL=https://your-legal-stream.m3u8");
-    console.log("- STREAM_BREAKING_BAD_S1E1_URL=https://your-legal-stream.m3u8");
-    console.log("- STREAM_BREAKING_BAD_S1E2_URL=https://your-legal-stream.m3u8");
+    console.log("- full URL: STREAM_INTERSTELLAR_URL=https://your-legal-stream.m3u8");
+    console.log("- mux playbackId: STREAM_INTERSTELLAR_URL=mux:yourPlaybackId");
+    console.log("- cloudflare playbackId: STREAM_INTERSTELLAR_URL=cloudflare:yourPlaybackId");
   } catch (error) {
     console.error("Seed streams failed:", error.message);
     process.exitCode = 1;

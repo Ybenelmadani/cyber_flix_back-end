@@ -9,12 +9,27 @@ const streamSourceSchema = new mongoose.Schema(
     },
     quality: {
       type: String,
+      default: "auto",
+      trim: true,
+    },
+    provider: {
+      type: String,
+      enum: ["custom", "cloudflare", "mux"],
+      default: "custom",
+    },
+    playbackId: {
+      type: String,
       default: "",
       trim: true,
     },
     url: {
       type: String,
-      required: true,
+      default: "",
+      trim: true,
+    },
+    path: {
+      type: String,
+      default: "",
       trim: true,
     },
     type: {

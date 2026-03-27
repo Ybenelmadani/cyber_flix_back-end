@@ -3,6 +3,7 @@ const router = express.Router();
 
 const {
   getStreamByTmdb,
+  getSignedPlayback,
   createStream,
   updateStream,
   deleteStream,
@@ -12,10 +13,9 @@ const {
 const { authRequired, optionalAuth } = require("../middleware/auth");
 const adminRequired = require("../middleware/admin");
 
-// Lecture publique avec auth optionnelle pour filtrer premium/free
+router.get("/:mediaType/:tmdbId/play", optionalAuth, getSignedPlayback);
 router.get("/:mediaType/:tmdbId", optionalAuth, getStreamByTmdb);
 
-// Admin
 router.get("/", authRequired, adminRequired, listStreams);
 router.post("/", authRequired, adminRequired, createStream);
 router.patch("/:id", authRequired, adminRequired, updateStream);

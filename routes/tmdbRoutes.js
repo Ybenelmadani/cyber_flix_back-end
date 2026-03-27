@@ -13,6 +13,7 @@ const {
   searchTvShows,
   getTvDetails,
   getTvSeasonDetails,
+  getTvEpisodeDetails,
   getTvByGenre,
   getTvGenres,
   getTrendingTvShows,
@@ -41,6 +42,10 @@ router.get("/tv/top-rated", getTopRatedTvShows);
 router.get("/tv/on-the-air", getOnTheAirTvShows);
 router.get("/tv/:id/watch/providers", getTvWatchProviders);
 router.get("/tv/:id/season/:seasonNumber", getTvSeasonDetails);
+router.get(
+  "/tv/:id/season/:seasonNumber/episode/:episodeNumber",
+  getTvEpisodeDetails
+);
 router.get("/tv/:id", getTvDetails);
 
 module.exports = router;
