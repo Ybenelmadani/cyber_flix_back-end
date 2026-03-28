@@ -1,47 +1,6 @@
-const express = require("express");
-const cors = require("cors");
 require("dotenv").config();
 const connectDb = require("./config/db");
-
-const app = express();
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
-app.use("/api/tmdb", require("./routes/tmdbRoutes"));
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/movies", require("./routes/movieRoutes"));
-app.use("/api/payments", require("./routes/paymentRoutes"));
-app.use("/api/streams", require("./routes/streamRoutes"));
-
-// Health check
-app.get("/", (req, res) => {
-  res.json({
-    status: "CYBERFLIX API Running",
-    version: "1.0.0",
-    endpoints: {
-      tmdb: "/api/tmdb",
-      auth: "/api/auth",
-      movies: "/api/movies",
-      payments: "/api/payments",
-      streams: "/api/streams",
-      health: "/api/health",
-    },
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "API is healthy",
-  });
-});
-
-// Error handling
-app.use(require("./middleware/errorHandler"));
+const app = require("./app");
 
 const PORT = process.env.PORT || 3001;
 
