@@ -3,22 +3,60 @@ const cors = require("cors");
 
 const app = express();
 
+const parseOrigin = (value) => {
+  try {
+    return new URL(String(value || "").trim()).origin;
+  } catch {
+    return null;
+  }
+};
+
+const frontendOrigin = parseOrigin(process.env.FRONTEND_URL);
 const allowedOrigins = new Set(
   [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    process.env.FRONTEND_URL,
+    frontendOrigin,
     ...(process.env.CORS_ORIGINS || "")
       .split(",")
-      .map((origin) => origin.trim())
+      .map((origin) => parseOrigin(origin))
       .filter(Boolean),
   ].filter(Boolean)
 );
 
+const vercelProjectSlug =
+  frontendOrigin && frontendOrigin.endsWith(".vercel.app")
+    ? new URL(frontendOrigin).hostname.replace(/\.vercel\.app$/i, "")
+    : "";
+
+const isAllowedOrigin = (origin) => {
+  if (!origin || allowedOrigins.size === 0 || allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    if (
+      vercelProjectSlug &&
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app") &&
+      (url.hostname === `${vercelProjectSlug}.vercel.app` ||
+        url.hostname.startsWith(`${vercelProjectSlug}-`))
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.size === 0 || allowedOrigins.has(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
 
