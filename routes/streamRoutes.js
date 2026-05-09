@@ -8,11 +8,13 @@ const {
   updateStream,
   deleteStream,
   listStreams,
+  listLegalStreams,
 } = require("../controllers/streamController");
 
 const { authRequired, optionalAuth } = require("../middleware/auth");
 const adminRequired = require("../middleware/admin");
 
+router.get("/legal", optionalAuth, listLegalStreams);
 router.get("/:mediaType/:tmdbId/play", optionalAuth, getSignedPlayback);
 router.get("/:mediaType/:tmdbId", optionalAuth, getStreamByTmdb);
 

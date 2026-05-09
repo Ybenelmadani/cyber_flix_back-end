@@ -14,7 +14,18 @@ const streamSourceSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
-      enum: ["custom", "cloudflare", "mux"],
+      enum: [
+        "custom",
+        "cloudflare",
+        "mux",
+        "youtube",
+        "vimeo",
+        "dailymotion",
+        "codespecters",
+        "embed",
+        "archive",
+        "direct",
+      ],
       default: "custom",
     },
     playbackId: {
@@ -34,7 +45,7 @@ const streamSourceSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["mp4", "hls"],
+      enum: ["mp4", "hls", "embed"],
       default: "hls",
     },
     language: {
@@ -43,6 +54,10 @@ const streamSourceSchema = new mongoose.Schema(
       trim: true,
     },
     isPremium: {
+      type: Boolean,
+      default: false,
+    },
+    isLegal: {
       type: Boolean,
       default: false,
     },

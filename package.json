@@ -11,8 +11,10 @@
     "stream:encode": "node scripts/encodeHls.js",
     "seed": "node scripts/seed.js",
     "seed:reset": "node scripts/seed.js --reset",
+    "admin:create": "node scripts/createAdmin.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed:streams": "node scripts/seedStreams.js"
+    "seed:streams": "node scripts/seedStreams.js",
+    "seed:legal": "node scripts/seedLegalStreams.js"
   },
   "keywords": [
     "movies",
