@@ -1,7 +1,19 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const mongoSanitize = require("express-mongo-sanitize");
+const xss = require("xss-clean");
+const hpp = require("hpp");
 
 const app = express();
+
+// Security Middlewares
+app.use(helmet({
+  contentSecurityPolicy: false,
+})); // Set security HTTP headers
+app.use(mongoSanitize()); // Data sanitization against NoSQL query injection
+app.use(xss()); // Data sanitization against XSS
+app.use(hpp()); // Prevent HTTP parameter pollution
 
 const parseOrigin = (value) => {
   try {
