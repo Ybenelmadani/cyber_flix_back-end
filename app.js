@@ -86,6 +86,7 @@ app.use("/api/movies", require("./routes/movieRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/streams", require("./routes/streamRoutes"));
 app.use("/api/scraper", require("./routes/scraperRoutes"));
+app.use("/api/free-providers", require("./routes/freeProvidersRoutes"));
 
 app.get("/", (_req, res) => {
   res.json({
