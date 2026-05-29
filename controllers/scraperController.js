@@ -311,6 +311,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
             name: $el.text().trim() || "Download Server",
             provider: "TopCinema",
             url,
+            type: "download",
             quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
           });
         }
