@@ -240,7 +240,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     return servers.length > 0 ? { provider: "EgyDead", servers } : null;
   } catch (err) {
     console.error("EgyDead Scraper Error:", err.message);
-    return null;
+    return { provider: "EgyDeadError", servers: [], error: err.message };
   }
 };
 
