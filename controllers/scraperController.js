@@ -79,93 +79,164 @@ function scoreTVLink(url, title, season, episode) {
   return score;
 }
 
+// Score results to find the best match
+function scoreEgyDeadResult(item, title, year, isTV = false) {
+  let score = 0;
+  const name = String(item.name || "").toLowerCase();
+  const orig = String(item.original_title || "").toLowerCase();
+  const query = title.toLowerCase();
+  
+  if (item.model_type === 'person') return -999;
+  
+  if (name.includes(query) || orig.includes(query)) score += 50;
+  if (orig === query) score += 30;
+  
+  // Year matching
+  if (year && String(item.year) === String(year)) {
+    score += 40;
+  }
+  
+  // TV/Movie matching
+  const itemIsTV = Boolean(item.is_series || item.type === 'series' || name.includes('مسلسل'));
+  if (isTV === itemIsTV) {
+    score += 30;
+  } else {
+    score -= 20;
+  }
+  
+  return score;
+}
+
+const parseBootstrapData = (html) => {
+  const match = html.match(/window\.bootstrapData\s*=\s*(.*?);\s*\n/);
+  if (match) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (e) {
+      console.error("Failed to parse bootstrap JSON:", e.message);
+    }
+  }
+  return null;
+};
+
+function detectProvider(url, name) {
+  const urlLower = String(url || "").toLowerCase();
+  const nameLower = String(name || "").toLowerCase();
+  
+  if (urlLower.includes("voe")) return "Voe";
+  if (urlLower.includes("dood") || urlLower.includes("ds2play")) return "DoodStream";
+  if (urlLower.includes("mixdrop")) return "Mixdrop";
+  if (urlLower.includes("earnvids")) return "EarnVids";
+  if (urlLower.includes("streamix")) return "Streamix";
+  if (urlLower.includes("byse") || urlLower.includes("byso")) return "Byse";
+  if (urlLower.includes("streamhg") || urlLower.includes("hgcloud")) return "StreamHG";
+  if (urlLower.includes("streamruby") || urlLower.includes("rubystream")) return "StreamRuby";
+  if (urlLower.includes("egybestvid")) return "EgyBestVid";
+  
+  // Fallbacks based on name
+  if (nameLower.includes("voe")) return "Voe";
+  if (nameLower.includes("dood")) return "DoodStream";
+  if (nameLower.includes("mixdrop")) return "Mixdrop";
+  if (nameLower.includes("earnvids")) return "EarnVids";
+  if (nameLower.includes("streamix")) return "Streamix";
+  
+  return name || "EgyDead";
+}
+
 /**
  * Scrape EgyDead
  */
 const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
   try {
-    let searchQuery = title;
-    if (isTV && season && episode) {
-      const sPad = season.toString().padStart(2, '0');
-      const ePad = episode.toString().padStart(2, '0');
-      searchQuery = `${title} s${sPad}e${ePad}`;
-    }
-
-    const searchUrl = `https://tv8.egydead.live/search/${encodeURIComponent(searchQuery)}/`;
+    const searchUrl = `https://egydead.ca/search/${encodeURIComponent(title)}/`;
     const { data: searchHtml } = await axios.get(searchUrl, {
       headers: { "User-Agent": USER_AGENT }
     });
     
-    const $search = cheerio.load(searchHtml);
-    let bestLink = null;
-    let bestScore = -999;
-    
-    $search('a').each((_, el) => {
-      const href = $search(el).attr('href');
-      if (href && href.startsWith('https://tv8.egydead.live/')) {
-        const score = isTV 
-          ? scoreTVLink(href, title, season, episode)
-          : scoreMovieLink(href, title, year);
-        if (score > bestScore) {
-          bestScore = score;
-          bestLink = href;
-        }
-      }
-    });
-
-    if (!bestLink || bestScore < 10) {
-      console.log(`EgyDead: No good match found for ${searchQuery} (Best score: ${bestScore})`);
+    const bootData = parseBootstrapData(searchHtml);
+    if (!bootData) {
+      console.log("EgyDead: No bootstrapData found in search results.");
       return null;
     }
-
-    console.log(`EgyDead: Found best match: ${bestLink} (Score: ${bestScore})`);
-
-    // EgyDead requires POST request with View=1 to get the playback & download links
-    const { data: movieHtml } = await axios.post(bestLink, qs.stringify({ View: "1" }), {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Content-Type": "application/x-www-form-urlencoded"
+    
+    const results = bootData.loaders?.searchPage?.results || [];
+    if (results.length === 0) {
+      console.log(`EgyDead: No search results found for query: ${title}`);
+      return null;
+    }
+    
+    // Score results
+    let bestItem = null;
+    let bestScore = -999;
+    
+    results.forEach(item => {
+      const score = scoreEgyDeadResult(item, title, year, isTV);
+      if (score > bestScore) {
+        bestScore = score;
+        bestItem = item;
       }
     });
     
-    const $movie = cheerio.load(movieHtml);
-    const servers = [];
-    const seenUrls = new Set();
+    if (!bestItem || bestScore < 10) {
+      console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
+      return null;
+    }
     
-    // 1. Scrape Download Links
-    $movie("a").each((_, el) => {
-      const url = $movie(el).attr("href");
-      const text = $movie(el).text().trim();
+    console.log(`EgyDead: Best matching title: ID=${bestItem.id} | Name="${bestItem.name}" | Score=${bestScore}`);
+    
+    const servers = [];
+    
+    if (!isTV) {
+      // Movie watch URL (using '/watch' as slug which Laravel resolves correctly)
+      const watchUrl = `https://egydead.ca/titles/${bestItem.id}/watch`;
+      console.log(`EgyDead: Fetching movie details: ${watchUrl}`);
+      const { data: detailsHtml } = await axios.get(watchUrl, {
+        headers: { "User-Agent": USER_AGENT }
+      });
       
-      const hosts = ["1fichier", "mixdrop", "dood", "uptobox", "ok.ru", "drive.google", "mega.nz", "uploadev", "userscloud", "forafile", "dsvplay", "minochinos", "hgcloud"];
-      if (url && url.startsWith("http") && !seenUrls.has(url)) {
-        if (hosts.some(h => url.includes(h)) || text.includes("تحميل") || text.includes("حمل الان")) {
-          seenUrls.add(url);
+      const detailsBootData = parseBootstrapData(detailsHtml);
+      const titleObj = detailsBootData?.loaders?.titlePage?.title;
+      const videos = titleObj?.videos || [];
+      
+      console.log(`EgyDead: Found ${videos.length} movie videos/servers.`);
+      videos.forEach(v => {
+        if (v.src) {
+          const providerName = detectProvider(v.src, v.name);
           servers.push({
-            name: text || "Download Link",
-            provider: "EgyDead",
-            url,
-            quality: "HD"
+            name: v.name || providerName,
+            provider: providerName,
+            url: v.src,
+            quality: String(v.quality || "HD").toUpperCase()
           });
         }
-      }
-    });
-
-    // 2. Scrape Watch Servers (data-link)
-    $movie("li").each((_, el) => {
-      const link = $movie(el).attr("data-link");
-      const name = $movie(el).text().trim();
-      if (link && link.startsWith("http") && !seenUrls.has(link)) {
-        seenUrls.add(link);
-        servers.push({
-          name: name ? `Watch: ${name}` : "Watch Server",
-          provider: "EgyDead",
-          url: link,
-          quality: "HD"
-        });
-      }
-    });
-
+      });
+    } else {
+      // Episode watch URL (using '/watch' as slug which Laravel resolves correctly)
+      const watchUrl = `https://egydead.ca/titles/${bestItem.id}/watch/season/${season}/episode/${episode}`;
+      console.log(`EgyDead: Fetching episode details: ${watchUrl}`);
+      const { data: detailsHtml } = await axios.get(watchUrl, {
+        headers: { "User-Agent": USER_AGENT }
+      });
+      
+      const detailsBootData = parseBootstrapData(detailsHtml);
+      // Episode details is in loaders.episodePage
+      const epObj = detailsBootData?.loaders?.episodePage?.episode;
+      const videos = epObj?.videos || [];
+      
+      console.log(`EgyDead: Found ${videos.length} episode videos/servers.`);
+      videos.forEach(v => {
+        if (v.src) {
+          const providerName = detectProvider(v.src, v.name);
+          servers.push({
+            name: v.name || providerName,
+            provider: providerName,
+            url: v.src,
+            quality: String(v.quality || "HD").toUpperCase()
+          });
+        }
+      });
+    }
+    
     return servers.length > 0 ? { provider: "EgyDead", servers } : null;
   } catch (err) {
     console.error("EgyDead Scraper Error:", err.message);
