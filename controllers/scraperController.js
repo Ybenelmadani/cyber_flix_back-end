@@ -348,6 +348,7 @@ exports.getLinks = async (req, res) => {
 
   res.json({
     success: true,
+    debugCode: "active_v2",
     results
   });
 };
