@@ -22,3 +22,20 @@ Thumbs.db
 # Build
 dist/
 build/
+
+# Local scraper/debug artifacts
+/dump_*.js
+/extract_*.js
+/inspect_*.js
+/parse_*.js
+/probe_*.js
+/search_*.js
+/test_*.js
+/deadpool_search.html
+/egybestvid.html
+/episode_page_success.html
+/full_movie_page.html
+/homepage.html
+/probing_success.html
+/tv_show_success.html
+/watch_page.html

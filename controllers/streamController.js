@@ -21,6 +21,20 @@ const LEGAL_PROVIDER_DEFAULTS = new Set([
 const isEmbedAutoFallbackEnabled = () =>
   String(process.env.EMBED_AUTO_FALLBACK || "true").toLowerCase() !== "false";
 
+const normalizeSubtitleTracks = (tracks = []) =>
+  (Array.isArray(tracks) ? tracks : [])
+    .map((track) => ({
+      label: String(track?.label || "").trim(),
+      language: String(track?.language || "ar").trim() || "ar",
+      url: String(track?.url || "").trim(),
+      kind:
+        String(track?.kind || "subtitles").trim().toLowerCase() === "captions"
+          ? "captions"
+          : "subtitles",
+      isDefault: Boolean(track?.isDefault),
+    }))
+    .filter((track) => track.url);
+
 const filterSourcesForUser = (sources = [], user = null) => {
   const isPremiumUser = user?.plan === "premium" || user?.role === "admin";
 
@@ -71,6 +85,7 @@ const buildAutoEmbedSource = () => ({
   language: "VO",
   isPremium: false,
   isLegal: true,
+  subtitles: [],
 });
 
 const buildVirtualEmbedStream = ({
@@ -118,6 +133,7 @@ const sanitizeSource = (source, index) => ({
   }),
   provider: source.provider || "custom",
   isPremium: Boolean(source.isPremium),
+  subtitles: normalizeSubtitleTracks(source.subtitles),
   isLegal:
     source.isLegal !== undefined && source.isLegal !== null
       ? Boolean(source.isLegal)
@@ -146,6 +162,16 @@ const validateSources = (sources = []) => {
 
   if (invalidSource) {
     return "Each source must include a playbackId or direct url, except configured embed providers";
+  }
+
+  const invalidSubtitle = sources.find((source) =>
+    normalizeSubtitleTracks(source?.subtitles).some(
+      (track) => !/^https?:\/\//i.test(track.url)
+    )
+  );
+
+  if (invalidSubtitle) {
+    return "Subtitle urls must be absolute http or https links";
   }
 
   return null;
@@ -319,6 +345,7 @@ const enrichSourceForPlayback = (source, context = {}) => {
     type: inferredType,
     quality: source?.quality || "auto",
     language: source?.language || "original",
+    subtitles: normalizeSubtitleTracks(source?.subtitles),
     isPremium: Boolean(source?.isPremium),
     provider: source?.provider || "custom",
     isLegal:
@@ -466,6 +493,7 @@ exports.getSignedPlayback = async (req, res) => {
         type: playbackType,
         quality: selectedSource.quality || "auto",
         language: selectedSource.language || "original",
+        subtitles: normalizeSubtitleTracks(selectedSource.subtitles),
         isPremium: Boolean(selectedSource.isPremium),
         provider: selectedSource.provider || "custom",
         isLegal:
