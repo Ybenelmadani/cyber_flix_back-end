@@ -1,14 +1,22 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is required");
-}
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const getJwtSecret = () => String(process.env.JWT_SECRET || "").trim();
+
+const ensureJwtSecret = (res) => {
+  if (getJwtSecret()) {
+    return true;
+  }
+
+  res.status(500).json({
+    success: false,
+    message: "JWT_SECRET is required",
+  });
+  return false;
+};
 
 const sanitizeUser = (userDoc) => ({
   id: String(userDoc._id),
@@ -28,12 +36,16 @@ const buildToken = (userDoc) =>
       plan: userDoc.plan || "free",
       role: userDoc.role || "user",
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: JWT_EXPIRES_IN }
   );
 
 const register = async (req, res) => {
   try {
+    if (!ensureJwtSecret(res)) {
+      return;
+    }
+
     const { email, password, name = "" } = req.body;
     const trimmedName = String(name).trim();
 
@@ -80,6 +92,10 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
+    if (!ensureJwtSecret(res)) {
+      return;
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -110,6 +126,10 @@ const login = async (req, res) => {
 
 const me = async (req, res) => {
   try {
+    if (!ensureJwtSecret(res)) {
+      return;
+    }
+
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -123,6 +143,10 @@ const me = async (req, res) => {
 
 const setPreferredLanguage = async (req, res) => {
   try {
+    if (!ensureJwtSecret(res)) {
+      return;
+    }
+
     const { language } = req.body;
     const allowed = new Set(["en", "fr", "ar"]);
 
@@ -144,6 +168,10 @@ const setPreferredLanguage = async (req, res) => {
 
 const upgradePremium = async (req, res) => {
   try {
+    if (!ensureJwtSecret(res)) {
+      return;
+    }
+
     const updated = await User.findByIdAndUpdate(req.user.id, { $set: { plan: "premium" } }, { new: true });
     return res.json({
       success: true,

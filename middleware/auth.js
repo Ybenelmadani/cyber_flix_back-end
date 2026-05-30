@@ -1,11 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is required");
-}
-
-const JWT_SECRET = process.env.JWT_SECRET;
+const getJwtSecret = () => String(process.env.JWT_SECRET || "").trim();
 
 const extractToken = (req) => {
   const authHeader = req.headers.authorization || "";
@@ -15,6 +11,15 @@ const extractToken = (req) => {
 
 const authRequired = async (req, res, next) => {
   try {
+    const jwtSecret = getJwtSecret();
+
+    if (!jwtSecret) {
+      return res.status(500).json({
+        success: false,
+        message: "JWT_SECRET is required",
+      });
+    }
+
     const token = extractToken(req);
 
     if (!token) {
@@ -24,7 +29,7 @@ const authRequired = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, jwtSecret);
     const user = await User.findById(decoded.id).select("-password");
 
     if (!user) {
@@ -46,6 +51,13 @@ const authRequired = async (req, res, next) => {
 
 const optionalAuth = async (req, res, next) => {
   try {
+    const jwtSecret = getJwtSecret();
+
+    if (!jwtSecret) {
+      req.user = null;
+      return next();
+    }
+
     const token = extractToken(req);
 
     if (!token) {
@@ -53,7 +65,7 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, jwtSecret);
     const user = await User.findById(decoded.id).select("-password");
 
     req.user = user || null;
