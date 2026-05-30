@@ -1,35 +1,5 @@
 const mongoose = require("mongoose");
 
-const subtitleTrackSchema = new mongoose.Schema(
-  {
-    label: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    language: {
-      type: String,
-      default: "ar",
-      trim: true,
-    },
-    url: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    kind: {
-      type: String,
-      enum: ["subtitles", "captions"],
-      default: "subtitles",
-    },
-    isDefault: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  { _id: false }
-);
-
 const streamSourceSchema = new mongoose.Schema(
   {
     name: {
@@ -90,10 +60,6 @@ const streamSourceSchema = new mongoose.Schema(
     isLegal: {
       type: Boolean,
       default: false,
-    },
-    subtitles: {
-      type: [subtitleTrackSchema],
-      default: [],
     },
   },
   { _id: false }
