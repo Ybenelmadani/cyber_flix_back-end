@@ -194,7 +194,7 @@ const appendEmbedApiKey = (url) => {
   if (!apiKey) return url;
 
   const separator = url.includes("?") ? "&" : "?";
-  const keyParam = process.env.EMBED_API_KEY_PARAM || "api_key";
+  const keyParam = process.env.EMBED_API_KEY_PARAM || "apikey";
   return `${url}${separator}${encodeURIComponent(keyParam)}=${encodeURIComponent(
     apiKey
   )}`;
