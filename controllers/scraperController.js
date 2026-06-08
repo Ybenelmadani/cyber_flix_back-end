@@ -126,19 +126,39 @@ function detectProvider(url, name) {
   if (urlLower.includes("voe")) return "Voe";
   if (urlLower.includes("dood") || urlLower.includes("ds2play")) return "DoodStream";
   if (urlLower.includes("mixdrop")) return "Mixdrop";
-  if (urlLower.includes("earnvids")) return "EarnVids";
+  if (urlLower.includes("earnvids") || urlLower.includes("minochinos")) return "EarnVids";
   if (urlLower.includes("streamix")) return "Streamix";
   if (urlLower.includes("byse") || urlLower.includes("byso")) return "Byse";
-  if (urlLower.includes("streamhg") || urlLower.includes("hgcloud")) return "StreamHG";
+  if (urlLower.includes("streamhg") || urlLower.includes("hgcloud") || urlLower.includes("audinifer")) return "StreamHG";
   if (urlLower.includes("streamruby") || urlLower.includes("rubystream")) return "StreamRuby";
   if (urlLower.includes("egybestvid")) return "EgyBestVid";
+  if (urlLower.includes("1fichier")) return "1Fichier";
+  if (urlLower.includes("uptobox")) return "Uptobox";
+  if (urlLower.includes("nitroflare")) return "Nitroflare";
+  if (urlLower.includes("ddownload")) return "DDownload";
+  if (urlLower.includes("mdiaload")) return "Mdiaload";
+  if (urlLower.includes("updown")) return "UpDown";
+  if (urlLower.includes("vidtube")) return "VidTube";
+  if (urlLower.includes("giga")) return "Giga";
+  if (urlLower.includes("drive.google")) return "Google Drive";
+  if (urlLower.includes("mega.nz") || urlLower.includes("mega.co")) return "Mega";
   
   // Fallbacks based on name
   if (nameLower.includes("voe")) return "Voe";
   if (nameLower.includes("dood")) return "DoodStream";
   if (nameLower.includes("mixdrop")) return "Mixdrop";
-  if (nameLower.includes("earnvids")) return "EarnVids";
+  if (nameLower.includes("earnvids") || nameLower.includes("minochinos")) return "EarnVids";
   if (nameLower.includes("streamix")) return "Streamix";
+  if (nameLower.includes("1fichier")) return "1Fichier";
+  if (nameLower.includes("uptobox")) return "Uptobox";
+  if (nameLower.includes("nitroflare")) return "Nitroflare";
+  if (nameLower.includes("ddownload")) return "DDownload";
+  if (nameLower.includes("mdiaload")) return "Mdiaload";
+  if (nameLower.includes("updown")) return "UpDown";
+  if (nameLower.includes("vidtube")) return "VidTube";
+  if (nameLower.includes("giga")) return "Giga";
+  if (nameLower.includes("google")) return "Google Drive";
+  if (nameLower.includes("mega")) return "Mega";
   
   return name || "EgyDead";
 }
@@ -303,13 +323,16 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
       const url = $el.attr("href");
       const text = $el.text().toLowerCase();
       
-      const hosts = ["1fichier", "mixdrop", "dood", "uptobox", "nitroflare", "ddownload", "mdiaload", "updown", "vidtube", "giga", "drive.google", "mega.nz"];
+      const hosts = ["1fichier", "mixdrop", "dood", "uptobox", "nitroflare", "ddownload", "mdiaload", "updown", "vidtube", "giga", "drive.google", "mega.nz", "audinifer", "minochinos", "streamhg", "earnvids"];
       if (url && url.startsWith("http") && !seenUrls.has(url)) {
-        if (hosts.some(h => url.includes(h) || text.includes(h))) {
+        const matchedHost = hosts.find(h => url.includes(h) || text.includes(h));
+        if (matchedHost) {
           seenUrls.add(url);
+          const providerName = detectProvider(url, matchedHost);
+          const rawName = $el.text().replace(/\s+/g, ' ').trim();
           servers.push({
-            name: $el.text().trim() || "Download Server",
-            provider: "TopCinema",
+            name: rawName || `${providerName} Download`,
+            provider: providerName,
             url,
             type: "download",
             quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
@@ -326,7 +349,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
 };
 
 exports.getLinks = async (req, res) => {
-  const { title, year, mediaType, season, episode } = req.query;
+  const { title, year, mediaType, season, episode, tmdbId } = req.query;
 
   if (!title) {
     return res.status(400).json({ success: false, message: "Title is required" });
@@ -337,15 +360,82 @@ exports.getLinks = async (req, res) => {
   const eNum = episode ? parseInt(episode, 10) : null;
   const yNum = year ? parseInt(year, 10) : null;
 
-  const results = [];
-  
-  const [egydead, topcinema] = await Promise.all([
-    scrapeEgyDead(title, yNum, isTV, sNum, eNum),
-    scrapeTopCinema(title, yNum, isTV, sNum, eNum)
-  ]);
+  const titlesToSearch = new Set([title]);
 
-  if (egydead) results.push(egydead);
-  if (topcinema) results.push(topcinema);
+  if (tmdbId && process.env.TMDB_API_KEY) {
+    try {
+      const type = mediaType === "tv" ? "tv" : "movie";
+      const tmdbKey = process.env.TMDB_API_KEY;
+      const baseUrl = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
+      
+      const transUrl = `${baseUrl}/${type}/${tmdbId}/translations?api_key=${tmdbKey}`;
+      const altUrl = `${baseUrl}/${type}/${tmdbId}/alternative_titles?api_key=${tmdbKey}`;
+      
+      const [transRes, altRes] = await Promise.all([
+        axios.get(transUrl, { timeout: 3000 }).catch(() => null),
+        axios.get(altUrl, { timeout: 3000 }).catch(() => null)
+      ]);
+      
+      if (transRes && transRes.data && transRes.data.translations) {
+        const arTrans = transRes.data.translations.find(t => t.iso_639_1 === "ar");
+        if (arTrans && arTrans.data) {
+          if (arTrans.data.name) titlesToSearch.add(arTrans.data.name);
+          if (arTrans.data.title) titlesToSearch.add(arTrans.data.title);
+        }
+      }
+      
+      if (altRes && altRes.data) {
+        const titlesList = altRes.data.results || altRes.data.titles || [];
+        titlesList.forEach(t => {
+          if (t.title) titlesToSearch.add(t.title);
+        });
+      }
+    } catch (tmdbErr) {
+      console.error("Scraper TMDB alternative titles fetch error:", tmdbErr.message);
+    }
+  }
+
+  const uniqueTitles = Array.from(titlesToSearch).slice(0, 3);
+  console.log(`Scraper querying EgyDead & TopCinema for titles: ${JSON.stringify(uniqueTitles)}`);
+
+  const scrapePromises = [];
+  uniqueTitles.forEach(t => {
+    scrapePromises.push(scrapeEgyDead(t, yNum, isTV, sNum, eNum));
+    scrapePromises.push(scrapeTopCinema(t, yNum, isTV, sNum, eNum));
+  });
+
+  const allScrapedResults = await Promise.all(scrapePromises);
+
+  const combinedEgyDeadServers = [];
+  const combinedTopCinemaServers = [];
+  const seenUrls = new Set();
+
+  allScrapedResults.forEach(scrapRes => {
+    if (!scrapRes) return;
+    if (scrapRes.provider === "EgyDead") {
+      (scrapRes.servers || []).forEach(server => {
+        if (server.url && !seenUrls.has(server.url)) {
+          seenUrls.add(server.url);
+          combinedEgyDeadServers.push(server);
+        }
+      });
+    } else if (scrapRes.provider === "TopCinema") {
+      (scrapRes.servers || []).forEach(server => {
+        if (server.url && !seenUrls.has(server.url)) {
+          seenUrls.add(server.url);
+          combinedTopCinemaServers.push(server);
+        }
+      });
+    }
+  });
+
+  const results = [];
+  if (combinedEgyDeadServers.length > 0) {
+    results.push({ provider: "EgyDead", servers: combinedEgyDeadServers });
+  }
+  if (combinedTopCinemaServers.length > 0) {
+    results.push({ provider: "TopCinema", servers: combinedTopCinemaServers });
+  }
 
   res.json({
     success: true,
