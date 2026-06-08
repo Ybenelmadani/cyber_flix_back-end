@@ -189,12 +189,17 @@ const applyEmbedTemplate = (template, values) =>
     .replace(/:episode\b/g, encodeURIComponent(values.episode || ""))
     .replace(/:episodeNumber\b/g, encodeURIComponent(values.episode || ""));
 
-const appendEmbedApiKey = (url) => {
+const appendEmbedApiKey = (url, source = null) => {
   const apiKey = String(process.env.EMBED_API_KEY || "").trim();
   if (!apiKey) return url;
 
+  const provider = String(source?.provider || "").trim().toLowerCase();
+  const isCodespectersUrl = /:\/\/api\.codespecters\.com\b/i.test(String(url || ""));
   const separator = url.includes("?") ? "&" : "?";
-  const keyParam = process.env.EMBED_API_KEY_PARAM || "apikey";
+  const keyParam =
+    provider === "codespecters" || isCodespectersUrl
+      ? "apikey"
+      : process.env.EMBED_API_KEY_PARAM || "apikey";
   return `${url}${separator}${encodeURIComponent(keyParam)}=${encodeURIComponent(
     apiKey
   )}`;
@@ -228,7 +233,7 @@ const buildExternalEmbedUrl = (source, context = {}) => {
     ? rawUrl
     : `${base}/${rawUrl.replace(/^\/+/, "")}`;
 
-  return appendEmbedApiKey(absoluteUrl);
+  return appendEmbedApiKey(absoluteUrl, source);
 };
 
 const buildPlaybackUrl = (source, context = {}) => {
