@@ -97,6 +97,11 @@ const streamSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    subtitleArabicUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     sources: {
       type: [streamSourceSchema],
       default: [],

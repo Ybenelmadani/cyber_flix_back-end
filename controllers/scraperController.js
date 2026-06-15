@@ -163,6 +163,45 @@ function detectProvider(url, name) {
   return name || "EgyDead";
 }
 
+const PLAYABLE_EMBED_PROVIDERS = new Set([
+  "voe",
+  "doodstream",
+  "mixdrop",
+  "earnvids",
+  "streamix",
+  "byse",
+  "streamhg",
+  "streamruby",
+  "egybestvid",
+  "vidtube",
+]);
+
+const PLAYABLE_DIRECT_PROVIDERS = new Set([
+  "google drive",
+]);
+
+const isDirectMediaUrl = (url) =>
+  /\.(m3u8|mp4|webm|mkv)(\?|#|$)/i.test(String(url || "").trim());
+
+const inferScrapedSourceType = (url, providerName = "") => {
+  if (isDirectMediaUrl(url)) {
+    return String(url || "").toLowerCase().includes(".m3u8") ? "hls" : "mp4";
+  }
+
+  const normalizedProvider = String(providerName || "").trim().toLowerCase();
+  if (
+    PLAYABLE_EMBED_PROVIDERS.has(normalizedProvider) ||
+    PLAYABLE_DIRECT_PROVIDERS.has(normalizedProvider)
+  ) {
+    return "embed";
+  }
+
+  return "unknown";
+};
+
+const isPlayableScrapedSource = (url, providerName = "") =>
+  inferScrapedSourceType(url, providerName) !== "unknown";
+
 /**
  * Scrape EgyDead
  */
@@ -222,12 +261,17 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       videos.forEach(v => {
         if (v.src) {
           const providerName = detectProvider(v.src, v.name);
-          servers.push({
-            name: v.name || providerName,
-            provider: providerName,
-            url: v.src,
-            quality: String(v.quality || "HD").toUpperCase()
-          });
+          const type = inferScrapedSourceType(v.src, providerName);
+          if (type !== "unknown") {
+            servers.push({
+              name: v.name || providerName,
+              provider: providerName,
+              url: v.src,
+              type,
+              language: "AR",
+              quality: String(v.quality || "HD").toUpperCase()
+            });
+          }
         }
       });
     } else {
@@ -247,12 +291,17 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       videos.forEach(v => {
         if (v.src) {
           const providerName = detectProvider(v.src, v.name);
-          servers.push({
-            name: v.name || providerName,
-            provider: providerName,
-            url: v.src,
-            quality: String(v.quality || "HD").toUpperCase()
-          });
+          const type = inferScrapedSourceType(v.src, providerName);
+          if (type !== "unknown") {
+            servers.push({
+              name: v.name || providerName,
+              provider: providerName,
+              url: v.src,
+              type,
+              language: "AR",
+              quality: String(v.quality || "HD").toUpperCase()
+            });
+          }
         }
       });
     }
@@ -330,13 +379,16 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
           seenUrls.add(url);
           const providerName = detectProvider(url, matchedHost);
           const rawName = $el.text().replace(/\s+/g, ' ').trim();
-          servers.push({
-            name: rawName || `${providerName} Download`,
-            provider: providerName,
-            url,
-            type: "download",
-            quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
-          });
+          if (isPlayableScrapedSource(url, providerName)) {
+            servers.push({
+              name: rawName || providerName,
+              provider: providerName,
+              url,
+              type: inferScrapedSourceType(url, providerName),
+              language: "AR",
+              quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
+            });
+          }
         }
       }
     });
