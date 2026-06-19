@@ -327,7 +327,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
       searchQuery = `${title}`; // year in query often breaks TopCinema strict search
     }
 
-    const searchUrl = `https://topcinemaa.com/?s=${encodeURIComponent(searchQuery)}`;
+    const searchUrl = `https://web.topcinemaa.com/?s=${encodeURIComponent(searchQuery)}`;
     const { data: searchHtml } = await axios.get(searchUrl, {
       headers: { "User-Agent": USER_AGENT }
     });
@@ -338,7 +338,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && href.startsWith('https://topcinemaa.com/')) {
+      if (href && href.includes('web.topcinemaa.com/')) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
