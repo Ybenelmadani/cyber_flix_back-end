@@ -196,7 +196,7 @@ const inferScrapedSourceType = (url, providerName = "") => {
     return "embed";
   }
 
-  return "unknown";
+  return "download";
 };
 
 const isPlayableScrapedSource = (url, providerName = "") =>
