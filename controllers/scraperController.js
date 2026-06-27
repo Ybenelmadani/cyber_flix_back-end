@@ -3,6 +3,11 @@ const cheerio = require("cheerio");
 const qs = require("qs");
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+const SCRAPER_REQUEST_OPTIONS = {
+  headers: { "User-Agent": USER_AGENT },
+  timeout: 15000,
+  proxy: false,
+};
 
 const arabicNumbers = {
   1: ["الاول", "الاولى", "1"],
@@ -17,6 +22,51 @@ const arabicNumbers = {
   10: ["العاشر", "العاشرة", "10"]
 };
 
+const normalizeTitleForMatch = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildTitleVariants = (title, year = null, isTV = false) => {
+  const raw = String(title || "").trim();
+  if (!raw) return [];
+
+  const variants = new Set([raw]);
+  const noYear = raw.replace(/\b(?:19|20)\d{2}\b/g, " ").replace(/\s+/g, " ").trim();
+  if (noYear && noYear !== raw) variants.add(noYear);
+
+  const punctuationLight = raw
+    .replace(/[\:|]/g, " ")
+    .replace(/[?']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (punctuationLight && punctuationLight !== raw) variants.add(punctuationLight);
+
+  const colonHead = raw.split(":")[0]?.trim();
+  if (colonHead && colonHead !== raw) variants.add(colonHead);
+
+  const dashHead = raw.split("-")[0]?.trim();
+  if (dashHead && dashHead !== raw) variants.add(dashHead);
+
+  if (year && !isTV) {
+    variants.add(`${raw} ${year}`);
+    if (colonHead) variants.add(`${colonHead} ${year}`);
+  }
+
+  return Array.from(variants)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .filter((entry, index, list) =>
+      list.findIndex(
+        (candidate) => normalizeTitleForMatch(candidate) === normalizeTitleForMatch(entry)
+      ) === index
+    );
+};
 // Robust link scoring system for Movies
 function scoreMovieLink(url, title, year) {
   let score = 0;
@@ -82,31 +132,37 @@ function scoreTVLink(url, title, season, episode) {
 // Score results to find the best match
 function scoreEgyDeadResult(item, title, year, isTV = false) {
   let score = 0;
-  const name = String(item.name || "").toLowerCase();
-  const orig = String(item.original_title || "").toLowerCase();
-  const query = title.toLowerCase();
-  
+  const name = normalizeTitleForMatch(item.name || "");
+  const orig = normalizeTitleForMatch(item.original_title || item.original_name || "");
+  const query = normalizeTitleForMatch(title);
+
   if (item.model_type === 'person') return -999;
-  
-  if (name.includes(query) || orig.includes(query)) score += 50;
-  if (orig === query) score += 30;
-  
-  // Year matching
+  if (!name && !orig) return -999;
+
+  if (name === query || orig === query) score += 80;
+  else if (name.includes(query) || orig.includes(query)) score += 50;
+
+  const queryWords = query.split(" ").filter(Boolean);
+  if (queryWords.length > 1) {
+    const wordMatches = queryWords.filter(
+      (word) => name.includes(word) || orig.includes(word)
+    ).length;
+    score += wordMatches * 12;
+  }
+
   if (year && String(item.year) === String(year)) {
     score += 40;
   }
-  
-  // TV/Movie matching
-  const itemIsTV = Boolean(item.is_series || item.type === 'series' || name.includes('مسلسل'));
+
+  const itemIsTV = Boolean(item.is_series || item.type === 'series');
   if (isTV === itemIsTV) {
     score += 30;
   } else {
     score -= 20;
   }
-  
+
   return score;
 }
-
 const parseBootstrapData = (html) => {
   const match = html.match(/window\.bootstrapData\s*=\s*(.*?);\s*\n/);
   if (match) {
@@ -208,9 +264,7 @@ const isPlayableScrapedSource = (url, providerName = "") =>
 const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     const searchUrl = `https://egydead.ca/search/${encodeURIComponent(title)}/`;
-    const { data: searchHtml } = await axios.get(searchUrl, {
-      headers: { "User-Agent": USER_AGENT }
-    });
+    const { data: searchHtml } = await axios.get(searchUrl, SCRAPER_REQUEST_OPTIONS);
     
     const bootData = parseBootstrapData(searchHtml);
     if (!bootData) {
@@ -249,9 +303,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       // Movie watch URL (using '/watch' as slug which Laravel resolves correctly)
       const watchUrl = `https://egydead.ca/titles/${bestItem.id}/watch`;
       console.log(`EgyDead: Fetching movie details: ${watchUrl}`);
-      const { data: detailsHtml } = await axios.get(watchUrl, {
-        headers: { "User-Agent": USER_AGENT }
-      });
+      const { data: detailsHtml } = await axios.get(watchUrl, SCRAPER_REQUEST_OPTIONS);
       
       const detailsBootData = parseBootstrapData(detailsHtml);
       const titleObj = detailsBootData?.loaders?.titlePage?.title;
@@ -278,9 +330,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       // Episode watch URL (using '/watch' as slug which Laravel resolves correctly)
       const watchUrl = `https://egydead.ca/titles/${bestItem.id}/watch/season/${season}/episode/${episode}`;
       console.log(`EgyDead: Fetching episode details: ${watchUrl}`);
-      const { data: detailsHtml } = await axios.get(watchUrl, {
-        headers: { "User-Agent": USER_AGENT }
-      });
+      const { data: detailsHtml } = await axios.get(watchUrl, SCRAPER_REQUEST_OPTIONS);
       
       const detailsBootData = parseBootstrapData(detailsHtml);
       // Episode details is in loaders.episodePage
@@ -328,9 +378,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     }
 
     const searchUrl = `https://web.topcinemaa.com/?s=${encodeURIComponent(searchQuery)}`;
-    const { data: searchHtml } = await axios.get(searchUrl, {
-      headers: { "User-Agent": USER_AGENT }
-    });
+    const { data: searchHtml } = await axios.get(searchUrl, SCRAPER_REQUEST_OPTIONS);
     
     const $search = cheerio.load(searchHtml);
     let bestLink = null;
@@ -338,7 +386,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && href.includes('web.topcinemaa.com/')) {
+      if (href && (href.includes('web.topcinemaa.com/') || href.includes('topcinemaa.cam/'))) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
@@ -359,9 +407,9 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     // TopCinema often has a /download/ subpage
     const downloadPageUrl = bestLink.endsWith("/") ? `${bestLink}download/` : `${bestLink}/download/`;
     
-    const { data: downloadHtml } = await axios.get(downloadPageUrl, {
-      headers: { "User-Agent": USER_AGENT }
-    }).catch(() => axios.get(bestLink, { headers: { "User-Agent": USER_AGENT } }));
+    const { data: downloadHtml } = await axios
+      .get(downloadPageUrl, SCRAPER_REQUEST_OPTIONS)
+      .catch(() => axios.get(bestLink, SCRAPER_REQUEST_OPTIONS));
     
     const $dl = cheerio.load(downloadHtml.data || downloadHtml);
     const servers = [];
@@ -379,16 +427,14 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
           seenUrls.add(url);
           const providerName = detectProvider(url, matchedHost);
           const rawName = $el.text().replace(/\s+/g, ' ').trim();
-          if (isPlayableScrapedSource(url, providerName)) {
-            servers.push({
-              name: rawName || providerName,
-              provider: providerName,
-              url,
-              type: inferScrapedSourceType(url, providerName),
-              language: "AR",
-              quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
-            });
-          }
+          servers.push({
+            name: rawName || providerName,
+            provider: providerName,
+            url,
+            type: inferScrapedSourceType(url, providerName),
+            language: "AR",
+            quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
+          });
         }
       }
     });
@@ -412,7 +458,7 @@ exports.getLinks = async (req, res) => {
   const eNum = episode ? parseInt(episode, 10) : null;
   const yNum = year ? parseInt(year, 10) : null;
 
-  const titlesToSearch = new Set([title]);
+  const titlesToSearch = new Set(buildTitleVariants(title, yNum, isTV));
 
   if (tmdbId && process.env.TMDB_API_KEY) {
     try {
@@ -431,15 +477,15 @@ exports.getLinks = async (req, res) => {
       if (transRes && transRes.data && transRes.data.translations) {
         const arTrans = transRes.data.translations.find(t => t.iso_639_1 === "ar");
         if (arTrans && arTrans.data) {
-          if (arTrans.data.name) titlesToSearch.add(arTrans.data.name);
-          if (arTrans.data.title) titlesToSearch.add(arTrans.data.title);
+          buildTitleVariants(arTrans.data.name, yNum, isTV).forEach(candidate => titlesToSearch.add(candidate));
+          buildTitleVariants(arTrans.data.title, yNum, isTV).forEach(candidate => titlesToSearch.add(candidate));
         }
       }
       
       if (altRes && altRes.data) {
         const titlesList = altRes.data.results || altRes.data.titles || [];
         titlesList.forEach(t => {
-          if (t.title) titlesToSearch.add(t.title);
+          buildTitleVariants(t.title, yNum, isTV).forEach(candidate => titlesToSearch.add(candidate));
         });
       }
     } catch (tmdbErr) {
@@ -447,7 +493,7 @@ exports.getLinks = async (req, res) => {
     }
   }
 
-  const uniqueTitles = Array.from(titlesToSearch).slice(0, 3);
+  const uniqueTitles = Array.from(titlesToSearch).slice(0, 8);
   console.log(`Scraper querying EgyDead & TopCinema for titles: ${JSON.stringify(uniqueTitles)}`);
 
   const scrapePromises = [];
@@ -495,3 +541,4 @@ exports.getLinks = async (req, res) => {
     results
   });
 };
+
