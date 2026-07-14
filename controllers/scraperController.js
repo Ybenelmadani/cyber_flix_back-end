@@ -228,6 +228,14 @@ function detectProvider(url, name) {
 }
 
 const PLAYABLE_EMBED_PROVIDERS = new Set([
+  "voe",
+  "doodstream",
+  "mixdrop",
+  "earnvids",
+  "streamix",
+  "byse",
+  "streamhg",
+  "streamruby",
   "egybestvid",
   "vidtube",
 ]);
