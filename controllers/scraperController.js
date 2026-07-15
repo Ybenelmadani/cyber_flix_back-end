@@ -601,7 +601,7 @@ exports.getLinks = async (req, res) => {
 
   allScrapedResults.forEach(scrapRes => {
     if (!scrapRes) return;
-    if (scrapRes.provider === "EgyDead") {
+    if (scrapRes.provider === "CyberFlix") {
       (scrapRes.servers || []).forEach(server => {
         if (server.url && !seenUrls.has(server.url)) {
           seenUrls.add(server.url);
