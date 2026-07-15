@@ -224,7 +224,7 @@ function detectProvider(url, name) {
   if (nameLower.includes("google")) return "Google Drive";
   if (nameLower.includes("mega")) return "Mega";
   
-  return name || "EgyDead";
+  return name || "CyberFlix";
 }
 
 const PLAYABLE_EMBED_PROVIDERS = new Set([
@@ -446,7 +446,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     });
 
     console.log(`EgyDead TV9: ${servers.length} servers found for "${title}"`);
-    return servers.length > 0 ? { provider: "EgyDead", servers } : null;
+    return servers.length > 0 ? { provider: "CyberFlix", servers } : null;
 
   } catch (err) {
     console.error("EgyDead TV9 Scraper Error:", err.message);
@@ -620,7 +620,7 @@ exports.getLinks = async (req, res) => {
 
   const results = [];
   if (combinedEgyDeadServers.length > 0) {
-    results.push({ provider: "EgyDead", servers: combinedEgyDeadServers });
+    results.push({ provider: "CyberFlix", servers: combinedEgyDeadServers });
   }
   if (combinedTopCinemaServers.length > 0) {
     results.push({ provider: "TopCinema", servers: combinedTopCinemaServers });
