@@ -460,14 +460,8 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
 const scrapeTopCinema = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     let searchQuery = title;
-    if (isTV && season && episode) {
-      const sPad = season.toString().padStart(2, '0');
-      const ePad = episode.toString().padStart(2, '0');
-      searchQuery = `${title} s${sPad}e${ePad}`;
-    } else if (year) {
-      searchQuery = `${title}`; // year in query often breaks TopCinema strict search
-    }
-
+    // TopCinema's search engine is very strict. Adding "s01e01" often yields 0 results.
+    // It's better to search just by title and let `scoreTVLink` find the correct episode link.
     const searchUrl = `https://topcinemaa.top/?s=${encodeURIComponent(searchQuery)}`;
     const { data: searchHtml } = await axios.get(searchUrl, SCRAPER_REQUEST_OPTIONS);
     
