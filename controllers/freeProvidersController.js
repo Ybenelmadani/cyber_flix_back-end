@@ -135,3 +135,29 @@ exports.getFreeProviders = (req, res) => {
     sources,
   });
 };
+
+exports.generateFreeServers = (tmdbId, mediaType, season, episode) => {
+  if (!tmdbId) return [];
+  if (mediaType === "tv" && (!season || !episode)) return [];
+  
+  return FREE_PROVIDERS.map((p, index) => {
+    const template = mediaType === "movie" ? p.movie : p.tv;
+    const url = buildUrl(template, {
+      id: tmdbId,
+      season,
+      episode,
+    });
+
+    return {
+      id: `free-${p.provider}-${index}`,
+      name: p.name,
+      provider: p.provider,
+      quality: p.quality,
+      url,
+      type: "embed",
+      isLegal: p.isLegal,
+      isPremium: false,
+      isFreeProvider: true,
+    };
+  });
+};

@@ -1,7 +1,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const qs = require("qs");
-
+const { generateFreeServers } = require("./freeProvidersController");
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const SCRAPER_REQUEST_OPTIONS = {
   headers: { "User-Agent": USER_AGENT },
@@ -624,6 +624,12 @@ exports.getLinks = async (req, res) => {
   }
   if (combinedTopCinemaServers.length > 0) {
     results.push({ provider: "TopCinema", servers: combinedTopCinemaServers });
+  }
+
+  // Inject 100% reliable free providers (VidLink, VidSrc, etc.) as the ultimate fallback
+  const fallbackServers = generateFreeServers(tmdbId, mediaType, season, episode);
+  if (fallbackServers && fallbackServers.length > 0) {
+    results.push({ provider: "CyberFlix Premium", servers: fallbackServers });
   }
 
   res.json({
