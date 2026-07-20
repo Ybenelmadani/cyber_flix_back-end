@@ -273,7 +273,7 @@ const isPlayableScrapedSource = (url, providerName = "") =>
  */
 const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
   try {
-    const BASE = "https://egydead.ca";
+    const BASE = "https://tv9.egydead.live";
     const TV9_HEADERS = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -281,12 +281,11 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       "Referer": BASE + "/",
     };
 
-    // 1. Recherche via ?s=
     const searchUrl = `${BASE}/?s=${encodeURIComponent(title)}`;
     console.log(`EgyDead TV9: Searching: ${searchUrl}`);
     const { data: searchHtml } = await axios.get(searchUrl, {
       headers: TV9_HEADERS,
-      timeout: 12000,
+      timeout: 10000,
     });
 
     const $s = cheerio.load(searchHtml);
