@@ -273,7 +273,7 @@ const isPlayableScrapedSource = (url, providerName = "") =>
  */
 const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
   try {
-    const BASE = "https://tv9.egydead.live";
+    const BASE = "https://egydead.ca";
     const TV9_HEADERS = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -462,7 +462,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     let searchQuery = title;
     // TopCinema's search engine is very strict. Adding "s01e01" often yields 0 results.
     // It's better to search just by title and let `scoreTVLink` find the correct episode link.
-    const searchUrl = `https://topcinemaa.top/?s=${encodeURIComponent(searchQuery)}`;
+    const searchUrl = `https://topcinma.com/?s=${encodeURIComponent(searchQuery)}`;
     const { data: searchHtml } = await axios.get(searchUrl, SCRAPER_REQUEST_OPTIONS);
     
     const $search = cheerio.load(searchHtml);
@@ -471,7 +471,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinema'))) {
+      if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema'))) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
