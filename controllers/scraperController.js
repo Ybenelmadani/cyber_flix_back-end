@@ -624,14 +624,6 @@ exports.getLinks = async (req, res) => {
   const fallbackServers = generateFreeServers(tmdbId, mediaType, season, episode);
   if (fallbackServers && fallbackServers.length > 0) {
     results.push({ provider: "CyberFlix Premium", servers: fallbackServers });
-    
-    const fallbackDownloads = fallbackServers.map(s => ({
-      ...s,
-      id: s.id + "-dl",
-      type: "download",
-      isFreeProvider: false,
-    }));
-    results.push({ provider: "CyberFlix Downloads", servers: fallbackDownloads });
   }
 
   res.json({
