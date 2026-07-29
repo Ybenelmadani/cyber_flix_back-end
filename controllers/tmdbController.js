@@ -170,6 +170,27 @@ const searchMovies = async (req, res) => {
   }
 };
 
+const searchMulti = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ success: false, message: "Parameter 'query' is required" });
+    }
+
+    const response = await tmdbGet("/search/multi", {
+      req,
+      extraParams: {
+        query,
+        page: getRequestPage(req),
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    sendTmdbError(res, "Unable to search multi", error);
+  }
+};
+
 const getMovieDetails = async (req, res) => {
   try {
     const response = await tmdbGet(`/movie/${req.params.id}`, {
@@ -386,6 +407,7 @@ const getTvWatchProviders = async (req, res) => {
 module.exports = {
   getPopularMovies,
   searchMovies,
+  searchMulti,
   getMovieDetails,
   getMoviesByGenre,
   getMovieGenres,

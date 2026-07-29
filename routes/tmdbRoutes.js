@@ -1,8 +1,9 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const {
   getPopularMovies,
   searchMovies,
+  searchMulti,
   getMovieDetails,
   getMoviesByGenre,
   getMovieGenres,
@@ -25,6 +26,7 @@ const {
 
 router.get("/popular", getPopularMovies);
 router.get("/search", searchMovies);
+router.get("/multi/search", searchMulti);
 router.get("/movie/:id", getMovieDetails);
 router.get("/genre/:genreId", getMoviesByGenre);
 router.get("/genres", getMovieGenres);
