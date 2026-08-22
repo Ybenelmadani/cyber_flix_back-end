@@ -1,0 +1,1 @@
+const axios = require('axios'); const cheerio = require('cheerio'); axios.get('https://egydead.cloud/?s=House%20of%20the%20Dragon').then(r => { const $ = cheerio.load(r.data); const links = []; $('.moviesBlocks a').each((i, el) => links.push($(el).attr('href'))); console.log('Found:', links); }).catch(console.error);

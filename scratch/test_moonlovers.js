@@ -1,0 +1,1 @@
+const { getLinks } = require('../controllers/scraperController'); const req = { query: { title: 'Moon Lovers: Scarlet Heart Ryeo', mediaType: 'tv', season: '1', episode: '1', tmdbId: '66433' } }; const res = { json: (d) => console.dir(d, {depth: null}), status: (c) => ({ json: (d) => console.log('Error', c, d) }) }; getLinks(req, res).catch(console.error);

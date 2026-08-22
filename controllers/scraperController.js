@@ -266,189 +266,92 @@ const inferScrapedSourceType = (url, providerName = "") => {
 const isPlayableScrapedSource = (url, providerName = "") =>
   inferScrapedSourceType(url, providerName) !== "unknown";
 
-/**
- * Scrape EgyDead — tv9.egydead.live (WordPress version)
- * egydead.ca est bloqué par Cloudflare → on utilise tv9.egydead.live
- * Méthode : GET ?s=titre pour chercher, POST View=1 pour débloquer les serveurs
- */
-const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
+const searchTitle = async (query) => {
+  const searchUrl = `https://egydead.ca/search/${encodeURIComponent(query)}/`;
   try {
-    const BASE = "https://tv9.egydead.live";
-    const TV9_HEADERS = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
-      "Referer": BASE + "/",
-    };
-
-    const searchUrl = `${BASE}/?s=${encodeURIComponent(title)}`;
-    console.log(`EgyDead TV9: Searching: ${searchUrl}`);
-    const { data: searchHtml } = await axios.get(searchUrl, {
-      headers: TV9_HEADERS,
+    console.log(`Searching for '${query}' on EgyDead.ca...`);
+    const { data } = await axios.get(searchUrl, {
+      headers: { "User-Agent": USER_AGENT },
       timeout: 10000,
     });
-
-    const $s = cheerio.load(searchHtml);
-    const results = [];
-    $s("li.movieItem a").each((i, el) => {
-      const href = $s(el).attr("href") || "";
-      const titleText = $s(el).attr("title") || $s(el).find(".BottomTitle").text().trim();
-      if (href && href.includes("egydead")) {
-        results.push({ href, titleText });
-      }
-    });
-
-    if (results.length === 0) {
-      console.log(`EgyDead TV9: No results for "${title}"`);
-      return null;
-    }
-
-    // 2. Trouver l'URL cible
-    let targetUrl = null;
-
-    if (isTV && season !== null && episode !== null) {
-      const sPad = String(season).padStart(2, "0");
-      const ePad = String(episode).padStart(2, "0");
-      const pattern = `s${sPad}e${ePad}`;
-
-      // Priorité : correspondance exacte dans le slug de l'épisode
-      const exactMatch = results.find(r => r.href.toLowerCase().includes(pattern));
-      if (exactMatch) {
-        targetUrl = exactMatch.href;
-        console.log(`EgyDead TV9: Episode match: ${targetUrl}`);
-      } else {
-        // Fallback : chercher dans la page de saison
-        const sPattern = `s${sPad}`;
-        const seasonMatch = results.find(r =>
-          r.href.includes("/season/") && r.href.toLowerCase().includes(sPattern)
-        );
-        if (seasonMatch) {
-          console.log(`EgyDead TV9: Checking season page: ${seasonMatch.href}`);
-          try {
-            const { data: seasonHtml } = await axios.get(seasonMatch.href, {
-              headers: TV9_HEADERS,
-              timeout: 10000,
-            });
-            const $season = cheerio.load(seasonHtml);
-            $season("li.movieItem a, a[href*='/episode/']").each((i, el) => {
-              const href = $season(el).attr("href") || "";
-              if (href.toLowerCase().includes(pattern)) targetUrl = href;
-            });
-          } catch (e) {
-            console.log(`EgyDead TV9: Season page error: ${e.message}`);
-          }
-        }
-        // Dernier fallback : utiliser la page série pour trouver l'épisode
-        if (!targetUrl) {
-          const seriePage = results.find(r => r.href.includes("/serie/"));
-          if (seriePage) {
-            try {
-              const { data: serieHtml } = await axios.get(seriePage.href, {
-                headers: TV9_HEADERS,
-                timeout: 10000,
-              });
-              const $serie = cheerio.load(serieHtml);
-              $serie("a[href*='/episode/']").each((i, el) => {
-                const href = $serie(el).attr("href") || "";
-                if (href.toLowerCase().includes(pattern)) targetUrl = href;
-              });
-            } catch (e) {
-              console.log(`EgyDead TV9: Serie page error: ${e.message}`);
-            }
-          }
-        }
-      }
-    } else if (!isTV) {
-      // Films : éviter les pages d'assemblage/collections/séries
-      const movieResults = results.filter(
-        r =>
-          !r.href.includes("/assembly/") &&
-          !r.href.includes("/serie/") &&
-          !r.href.includes("/season/") &&
-          !r.href.includes("/episode/")
-      );
-      if (movieResults.length > 0) {
-        if (year) {
-          const yearMatch = movieResults.find(
-            r => r.href.includes(String(year)) || r.titleText.includes(String(year))
-          );
-          targetUrl = yearMatch ? yearMatch.href : movieResults[0].href;
-        } else {
-          targetUrl = movieResults[0].href;
-        }
-      } else if (results.length > 0) {
-        targetUrl = results.find(r => !r.href.includes("/assembly/"))?.href || results[0].href;
-      }
-    }
-
-    if (!targetUrl) {
-      console.log(`EgyDead TV9: No target URL found for "${title}" ${isTV ? `S${season}E${episode}` : ""}`);
-      return null;
-    }
-
-    console.log(`EgyDead TV9: POST View=1 → ${targetUrl}`);
-
-    // 3. POST View=1 pour débloquer la liste des serveurs
-    const { data: detailHtml } = await axios.post(targetUrl, "View=1", {
-      headers: {
-        ...TV9_HEADERS,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Origin": BASE,
-        "Referer": targetUrl,
-      },
-      timeout: 15000,
-      maxRedirects: 5,
-    });
-
-    // 4. Parser les liens serveurs depuis .serversList li[data-link]
-    const $d = cheerio.load(detailHtml);
-    const servers = [];
-    const seenUrls = new Set();
-
-    $d(".serversList li[data-link]").each((i, el) => {
-      const url = $d(el).attr("data-link");
-      const name = $d(el).text().trim();
-      if (url && !seenUrls.has(url)) {
-        seenUrls.add(url);
-        const providerName = detectProvider(url, name);
-        const type = inferScrapedSourceType(url, providerName);
-        if (type !== "unknown") {
-          servers.push({
-            name: name || providerName,
-            provider: providerName,
-            url,
-            type,
-            language: "AR",
-            quality: "HD",
-          });
-        }
-      }
-    });
-
-    // Download links
-    $d('.downloadMaster a[href], .donwload-table a[href], [class*="donwload"] a[href]').each((i, el) => {
-      const url = $d(el).attr("href");
-      let name = $d(el).text().trim();
-      if (name === "حمل الان") name = ""; // Ignore generic arabic "Download now" text
-      if (url && url.startsWith("http") && !seenUrls.has(url) && !url.includes("egydead")) {
-        seenUrls.add(url);
-        const providerName = detectProvider(url, name);
-        servers.push({
-          name: name || providerName,
-          provider: providerName,
-          url,
-          type: "download",
-          language: "AR",
-          quality: "1080p", // Often 1080p on these sections
-        });
-      }
-    });
-
-    console.log(`EgyDead TV9: ${servers.length} servers found for "${title}"`);
-    return servers.length > 0 ? { provider: "CyberFlix", servers } : null;
-
+    
+    const bootData = parseBootstrapData(data);
+    if (!bootData) return [];
+    
+    return bootData.loaders?.searchPage?.results || [];
   } catch (err) {
-    console.error("EgyDead TV9 Scraper Error:", err.message);
+    console.error("EgyDead Search error:", err.message);
+    return [];
+  }
+};
+
+const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
+  try {
+    const results = await searchTitle(title);
+    if (results.length === 0) return null;
+    
+    let bestItem = null;
+    let bestScore = -999;
+    
+    results.forEach(item => {
+      const score = scoreEgyDeadResult(item, title, year, isTV);
+      if (score > bestScore) {
+        bestScore = score;
+        bestItem = item;
+      }
+    });
+    
+    if (!bestItem || bestScore < 10) {
+      console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
+      return null;
+    }
+    
+    console.log(`EgyDead: Best match ID=${bestItem.id} | Score=${bestScore}`);
+    
+    const servers = [];
+    const watchUrl = isTV 
+      ? `https://egydead.ca/titles/${bestItem.id}/watch/season/${season}/episode/${episode}`
+      : `https://egydead.ca/titles/${bestItem.id}/watch`;
+      
+    const { data } = await axios.get(watchUrl, {
+      headers: { "User-Agent": USER_AGENT },
+      timeout: 10000,
+    });
+    
+    const bootData = parseBootstrapData(data);
+    const mediaObj = isTV ? bootData?.loaders?.episodePage?.episode : bootData?.loaders?.titlePage?.title;
+    const videos = mediaObj?.videos || [];
+    
+    videos.forEach(v => {
+      const providerName = detectProvider(v.src, v.name || "EgyDead");
+      servers.push({
+        name: v.name || providerName,
+        provider: providerName,
+        url: v.src,
+        type: inferScrapedSourceType(v.src, providerName),
+        language: "AR",
+        quality: String(v.quality || "HD").toUpperCase()
+      });
+    });
+    
+    // Check if by any chance downloads exist on the new platform
+    const downloads = mediaObj?.downloads || [];
+    downloads.forEach(d => {
+      const providerName = detectProvider(d.src, d.name || "EgyDead Download");
+      servers.push({
+        name: d.name || providerName,
+        provider: providerName,
+        url: d.src,
+        type: "download",
+        language: "AR",
+        quality: "1080p"
+      });
+    });
+    
+    console.log(`EgyDead: ${servers.length} servers found for "${title}"`);
+    return servers.length > 0 ? { provider: "CyberFlix", servers } : null;
+  } catch (err) {
+    console.error("EgyDead Scraper Error:", err.message);
     return null;
   }
 };

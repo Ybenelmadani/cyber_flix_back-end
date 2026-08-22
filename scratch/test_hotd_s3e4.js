@@ -1,0 +1,1 @@
+const { getLinks } = require('../controllers/scraperController'); const req = { query: { title: 'House of the Dragon', mediaType: 'tv', season: '3', episode: '4', tmdbId: '94997' } }; const res = { json: (d) => console.dir(d, {depth: null}), status: (c) => ({ json: (d) => console.log('Error', c, d) }) }; getLinks(req, res).catch(console.error);
