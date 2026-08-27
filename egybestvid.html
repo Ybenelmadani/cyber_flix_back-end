@@ -50,7 +50,7 @@ $.cookie('ref_url', 'egydead.ca', { expires: 10 });
 
 <script type='text/javascript'>
   jwplayer("vplayer").setup({
-    sources: [{file:"https://s1.egybestvid.com/hls2/01/00000/hi42abfian0h_n/master.m3u8?t=Q18bzmWCrizLTtW-ODvscip4O4IVXP6OBsaiAWz-o2k&s=1780076481&e=43200&v=20877462&i=0.3&sp=0"}],
+    sources: [{file:"https://s1.egybestvid.com/hls2/01/00000/hi42abfian0h_n/master.m3u8?t=3ZzyVl6HBIQl7zwvsm99AJpxNPKj4170xPqeNUt-ZgU&s=1787433283&e=50400&v=31414415&i=0.3&sp=0"}],
     //withCredentials: true,
     image: "https://s1.egybestvid.com/i/01/00000/hi42abfian0h.jpg",
     width: "100%", 
@@ -68,7 +68,7 @@ $.cookie('ref_url', 'egydead.ca', { expires: 10 });
     //pipIcon: 'disabled',
     androidhls: "true"
     ,tracks: [{file: "/srt/empty.srt", label: "Upload captions", kind: "captions"}]
-    ,'qualityLabels':{"856":"480p (857 kbps)"},title:"Deadpool 2016 1080p", displaytitle:true,abouttext:"Egybest", aboutlink:"https://egybest.la",playbackRateControls: true, playbackRates: [1, 1.25, 1.5, 2]
+    ,'qualityLabels':{"856":"480p (857 kbps)"},title:"Deadpool 2016 1080p", displaytitle:true,abouttext:"Egybest", aboutlink:"https://egybest.la",cast: {},playbackRateControls: true, playbackRates: [1, 1.25, 1.5, 2]
   });
 var vvplay,vvad;
 var vastdone1=0,vastdone2=0;
@@ -87,7 +87,7 @@ player.on('pause', function(x) {  });
 //player.on('all', function(x) { console.log(x); });
 player.on('bufferChange', function(x) { 
 	//console.log(x); 
-	if(x.fragNum==5) createCookieSec('vid','20877462',60*60*5);
+	if(x.fragNum==5) createCookieSec('vid','31414415',60*60*5);
 });
 
 function createCookieSec(name,value,sec) {
@@ -105,7 +105,7 @@ function doPlay(x)
 	adb=0;
 	if( window.adbon == 1 ){ adb=1; }
 	if(''!=''){
-		$.get('/dl?op=view&view_id=20877462&hash=1780076481-a65e004b0d59ee31c38776747dfb0487&adb='+adb, function(data) {console.log('view:'+data);} );
+		$.get('/dl?op=view&view_id=31414415&hash=1787433283-f09b5e2c91f059ac3e39dbf0afd8cbb0&adb='+adb, function(data) {console.log('view:'+data);} );
 	}
 	var lastt = ls.get('tthi42abfian0h'); if(lastt>0){ jwplayer().seek( lastt ); }
 }
@@ -249,6 +249,12 @@ $(function() {
 
 
 
-<script>(function(s){s.dataset.zone='9645567',s.src='https://llvpn.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+
+<script type="text/javascript">
+    aclib.runPop({
+        zoneId: '11417526',
+    });
+</script>
 
 </BODY></HTML>

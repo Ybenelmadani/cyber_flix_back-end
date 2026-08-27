@@ -185,7 +185,7 @@ function detectProvider(url, name) {
   if (urlLower.includes("earnvids") || urlLower.includes("minochinos") || urlLower.includes("morencius")) return "EarnVids";
   if (urlLower.includes("streamix") || urlLower.includes("vidaraa")) return "Streamix";
   if (urlLower.includes("byse") || urlLower.includes("byso") || urlLower.includes("bysekoze")) return "Byse";
-  if (urlLower.includes("streamhg") || urlLower.includes("hgcloud") || urlLower.includes("audinifer")) return "StreamHG";
+  if (urlLower.includes("streamhg") || urlLower.includes("hgcloud") || urlLower.includes("audinifer") || urlLower.includes("hanerix")) return "StreamHG";
   if (urlLower.includes("streamruby") || urlLower.includes("rubystream") || urlLower.includes("stmruby")) return "StreamRuby";
   if (urlLower.includes("egybestvid")) return "EgyBestVid";
   if (urlLower.includes("1fichier")) return "1Fichier";
