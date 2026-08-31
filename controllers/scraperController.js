@@ -5,7 +5,7 @@ const { generateFreeServers } = require("./freeProvidersController");
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const SCRAPER_REQUEST_OPTIONS = {
   headers: { "User-Agent": USER_AGENT },
-  timeout: 15000,
+  timeout: 11000,
   proxy: false,
 };
 
@@ -19,7 +19,17 @@ const arabicNumbers = {
   7: ["السابع", "السابعة", "7"],
   8: ["الثامن", "الثامنة", "8"],
   9: ["التاسع", "التاسعة", "9"],
-  10: ["العاشر", "العاشرة", "10"]
+  10: ["العاشر", "العاشرة", "10"],
+  11: ["الحادي عشر", "11"],
+  12: ["الثاني عشر", "12"],
+  13: ["الثالث عشر", "13"],
+  14: ["الرابع عشر", "14"],
+  15: ["الخامس عشر", "15"],
+  16: ["السادس عشر", "16"],
+  17: ["السابع عشر", "17"],
+  18: ["الثامن عشر", "18"],
+  19: ["التاسع عشر", "19"],
+  20: ["العشرون", "20"]
 };
 
 const normalizeTitleForMatch = (value = "") =>
@@ -95,37 +105,76 @@ function scoreTVLink(url, title, season, episode) {
   const decoded = decodeURIComponent(url).toLowerCase().replace(/[-_]/g, ' ');
   const cleanTitle = title.toLowerCase();
   
-  if (decoded.includes(cleanTitle)) score += 20;
+  if (decoded.includes(cleanTitle)) score += 30;
   
   // Avoid movies
-  if (decoded.includes('فيلم') || decoded.includes('movie')) score -= 50;
+  if (decoded.includes('فيلم') || decoded.includes('movie')) return -999;
   
   // Basic TV markers
   if (decoded.includes('episode') || decoded.includes('الحلقة') || decoded.includes('حلقة')) score += 10;
   if (decoded.includes('season') || decoded.includes('الموسم') || decoded.includes('موسم')) score += 10;
 
-  const sStr = season.toString();
-  const sTerms = arabicNumbers[season] || [sStr];
-  
-  const hasSeasonMatch = sTerms.some(term => {
-    if (term === sStr) {
-      return decoded.includes(`الموسم ${term}`) || decoded.includes(`موسم ${term}`) || decoded.includes(`s${sStr}`) || decoded.includes(`season ${sStr}`);
+  if (season !== null && season !== undefined) {
+    const sNum = Number(season);
+    // Disqualify any link that explicitly mentions another season
+    for (let otherS = 1; otherS <= 20; otherS++) {
+      if (otherS !== sNum) {
+        const otherRegexes = [
+          new RegExp(`(?:الموسم|موسم)\\s*0*${otherS}(?!\\d)`, 'i'),
+          new RegExp(`\\bs0*${otherS}(?!\\d)`, 'i'),
+        ];
+        if (arabicNumbers[otherS]) {
+          arabicNumbers[otherS].forEach(term => {
+            if (isNaN(term)) otherRegexes.push(new RegExp(`(?:الموسم|موسم)\\s*${term}`, 'i'));
+          });
+        }
+        if (otherRegexes.some(rx => rx.test(decoded))) {
+          return -999; // Disqualify wrong season!
+        }
+      }
     }
-    return decoded.includes(`الموسم ${term}`) || decoded.includes(`موسم ${term}`) || decoded.includes(term);
-  });
-  if (hasSeasonMatch) score += 30;
 
-  const eStr = episode.toString();
-  const eTerms = arabicNumbers[episode] || [eStr];
-  
-  const hasEpisodeMatch = eTerms.some(term => {
-    if (term === eStr) {
-      return decoded.includes(`الحلقة ${term}`) || decoded.includes(`حلقة ${term}`) || decoded.includes(`e${eStr}`) || decoded.includes(`episode ${eStr}`);
+    const seasonRegexes = [
+      new RegExp(`(?:الموسم|موسم)\\s*0*${sNum}(?!\\d)`, 'i'),
+      new RegExp(`\\bs0*${sNum}(?!\\d)`, 'i'),
+      new RegExp(`\\bseason\\s*0*${sNum}(?!\\d)`, 'i'),
+    ];
+    if (arabicNumbers[sNum]) {
+      arabicNumbers[sNum].forEach(term => {
+        if (isNaN(term)) seasonRegexes.push(new RegExp(`(?:الموسم|موسم)\\s*${term}`, 'i'));
+      });
     }
-    return decoded.includes(`الحلقة ${term}`) || decoded.includes(`حلقة ${term}`) || decoded.includes(term);
-  });
-  if (hasEpisodeMatch) score += 40;
-  
+    const hasSeasonMatch = seasonRegexes.some(rx => rx.test(decoded));
+    if (!hasSeasonMatch) return -999; // Must match requested season
+    score += 40;
+  }
+
+  if (episode !== null && episode !== undefined) {
+    const eNum = Number(episode);
+    const episodeRegexes = [
+      new RegExp(`(?:الحلقة|حلقة)\\s*0*${eNum}(?!\\d)`, 'i'),
+      new RegExp(`\\be0*${eNum}(?!\\d)`, 'i'),
+      new RegExp(`\\bepisode\\s*0*${eNum}(?!\\d)`, 'i'),
+    ];
+    if (arabicNumbers[eNum]) {
+      arabicNumbers[eNum].forEach(term => {
+        if (isNaN(term)) episodeRegexes.push(new RegExp(`(?:الحلقة|حلقة)\\s*${term}`, 'i'));
+      });
+    }
+    const hasEpisodeMatch = episodeRegexes.some(rx => rx.test(decoded));
+    if (hasEpisodeMatch) {
+      score += 50;
+    } else {
+      // If another episode number is explicitly found, penalize heavily
+      for (let otherE = 1; otherE <= 30; otherE++) {
+        if (otherE !== eNum) {
+          const otherRx = new RegExp(`(?:الحلقة|حلقة)\\s*0*${otherE}(?!\\d)`, 'i');
+          if (otherRx.test(decoded)) return -999;
+        }
+      }
+    }
+  }
+
   return score;
 }
 
@@ -325,10 +374,19 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     videos.forEach(v => {
       const providerName = detectProvider(v.src, v.name || "EgyDead");
       servers.push({
-        name: v.name || providerName,
+        name: v.name || `${providerName} HD`,
         provider: providerName,
         url: v.src,
         type: inferScrapedSourceType(v.src, providerName),
+        language: "AR",
+        quality: String(v.quality || "HD").toUpperCase()
+      });
+      // Also provide as a download server so it populates the Download servers grid
+      servers.push({
+        name: `${providerName} سيرفر المشاهدة والتحميل`,
+        provider: providerName,
+        url: v.src,
+        type: "download",
         language: "AR",
         quality: String(v.quality || "HD").toUpperCase()
       });
@@ -339,7 +397,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     downloads.forEach(d => {
       const providerName = detectProvider(d.src, d.name || "EgyDead Download");
       servers.push({
-        name: d.name || providerName,
+        name: d.name || `${providerName} 1080p`,
         provider: providerName,
         url: d.src,
         type: "download",
@@ -362,10 +420,10 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
 const scrapeTopCinema = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     let searchQuery = title;
-    // TopCinema's search engine is very strict. Adding "s01e01" often yields 0 results.
-    // It's better to search just by title and let `scoreTVLink` find the correct episode link.
-    const searchUrl = `https://topcinma.com/?s=${encodeURIComponent(searchQuery)}`;
-    const { data: searchHtml } = await axios.get(searchUrl, SCRAPER_REQUEST_OPTIONS);
+    const searchUrl = `https://topcinemaa.live/?s=${encodeURIComponent(searchQuery)}`;
+    const { data: searchHtml } = await axios
+      .get(searchUrl, SCRAPER_REQUEST_OPTIONS)
+      .catch(() => axios.get(`https://topcinma.com/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
     
     const $search = cheerio.load(searchHtml);
     let bestLink = null;
@@ -373,7 +431,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema'))) {
+      if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema') || href.includes('topcinemaa.live/'))) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
@@ -383,6 +441,29 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
         }
       }
     });
+
+    // If TV show episode is not on page 1, check page 2 of search results
+    if (isTV && (!bestLink || bestScore < 10)) {
+      try {
+        const searchPage2Url = `https://topcinemaa.live/page/2/?s=${encodeURIComponent(searchQuery)}`;
+        const { data: page2Html } = await axios
+          .get(searchPage2Url, SCRAPER_REQUEST_OPTIONS)
+          .catch(() => axios.get(`https://topcinma.com/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
+        const $page2 = cheerio.load(page2Html);
+        $page2('a').each((_, el) => {
+          const href = $page2(el).attr('href');
+          if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema') || href.includes('topcinemaa.live/'))) {
+            const score = scoreTVLink(href, title, season, episode);
+            if (score > bestScore) {
+              bestScore = score;
+              bestLink = href;
+            }
+          }
+        });
+      } catch {
+        // Page 2 may not exist, silently proceed
+      }
+    }
 
     if (!bestLink || bestScore < 10) {
       console.log(`TopCinema: No good match found for ${searchQuery} (Best score: ${bestScore})`);
@@ -413,14 +494,21 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
         if (matchedHost) {
           seenUrls.add(url);
           const providerName = detectProvider(url, matchedHost);
-          const rawName = $el.text().replace(/\s+/g, ' ').trim();
+          let rawName = $el.text().replace(/\s+/g, ' ').trim();
+          if (rawName.toLowerCase().includes("videotube") || rawName.toLowerCase().includes("vidtube")) {
+            rawName = "VidTube متعدد الجودات";
+          }
+          
+          const quality = text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : text.includes("480") ? "480p" : "HD";
+          
+          // All links from TopCinema's download page are download servers
           servers.push({
-            name: rawName || providerName,
+            name: rawName || `${providerName} ${quality}`,
             provider: providerName,
             url,
-            type: inferScrapedSourceType(url, providerName),
+            type: "download",
             language: "AR",
-            quality: text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : "HD"
+            quality
           });
         }
       }
@@ -471,7 +559,7 @@ exports.getLinks = async (req, res) => {
       
       if (altRes && altRes.data) {
         const titlesList = altRes.data.results || altRes.data.titles || [];
-        titlesList.forEach(t => {
+        titlesList.slice(0, 3).forEach(t => {
           buildTitleVariants(t.title, yNum, isTV).forEach(candidate => titlesToSearch.add(candidate));
         });
       }
@@ -480,7 +568,8 @@ exports.getLinks = async (req, res) => {
     }
   }
 
-  const uniqueTitles = Array.from(titlesToSearch).slice(0, 8);
+  // Prioritize primary title first and limit to max 3 unique titles to stay within Vercel timeout
+  const uniqueTitles = Array.from(titlesToSearch).slice(0, 3);
   console.log(`Scraper querying EgyDead & TopCinema for titles: ${JSON.stringify(uniqueTitles)}`);
 
   const scrapePromises = [];
@@ -493,21 +582,23 @@ exports.getLinks = async (req, res) => {
 
   const combinedEgyDeadServers = [];
   const combinedTopCinemaServers = [];
-  const seenUrls = new Set();
+  const seenServerKeys = new Set();
 
   allScrapedResults.forEach(scrapRes => {
     if (!scrapRes) return;
     if (scrapRes.provider === "CyberFlix") {
       (scrapRes.servers || []).forEach(server => {
-        if (server.url && !seenUrls.has(server.url)) {
-          seenUrls.add(server.url);
+        const key = `${server.url}-${server.type}`;
+        if (server.url && !seenServerKeys.has(key)) {
+          seenServerKeys.add(key);
           combinedEgyDeadServers.push(server);
         }
       });
     } else if (scrapRes.provider === "TopCinema") {
       (scrapRes.servers || []).forEach(server => {
-        if (server.url && !seenUrls.has(server.url)) {
-          seenUrls.add(server.url);
+        const key = `${server.url}-${server.type}`;
+        if (server.url && !seenServerKeys.has(key)) {
+          seenServerKeys.add(key);
           combinedTopCinemaServers.push(server);
         }
       });
@@ -515,11 +606,11 @@ exports.getLinks = async (req, res) => {
   });
 
   const results = [];
-  if (combinedEgyDeadServers.length > 0) {
-    results.push({ provider: "CyberFlix", servers: combinedEgyDeadServers });
-  }
   if (combinedTopCinemaServers.length > 0) {
     results.push({ provider: "TopCinema", servers: combinedTopCinemaServers });
+  }
+  if (combinedEgyDeadServers.length > 0) {
+    results.push({ provider: "CyberFlix", servers: combinedEgyDeadServers });
   }
 
   // Inject 100% reliable free providers (VidLink, VidSrc, etc.) as the ultimate fallback
@@ -530,7 +621,7 @@ exports.getLinks = async (req, res) => {
 
   res.json({
     success: true,
-    debugCode: "active_v2",
+    debugCode: "active_v3",
     results
   });
 };
