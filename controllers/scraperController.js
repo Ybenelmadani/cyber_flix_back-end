@@ -145,8 +145,8 @@ function scoreTVLink(url, title, season, episode) {
       });
     }
     const hasSeasonMatch = seasonRegexes.some(rx => rx.test(decoded));
-    if (!hasSeasonMatch) return -999; // Must match requested season
-    score += 40;
+    if (!hasSeasonMatch && sNum !== 1) return -999; // Must match requested season if not season 1
+    if (hasSeasonMatch) score += 40;
   }
 
   if (episode !== null && episode !== undefined) {
