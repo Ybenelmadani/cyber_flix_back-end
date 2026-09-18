@@ -2,6 +2,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const qs = require("qs");
 const { generateFreeServers } = require("./freeProvidersController");
+const { flareGet, flarePost } = require("../utils/flareSolverr");
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const SCRAPER_REQUEST_OPTIONS = {
   headers: { "User-Agent": USER_AGENT },
@@ -198,7 +199,8 @@ function scoreTVLink(url, title, season, episode) {
       for (let otherE = 1; otherE <= 30; otherE++) {
         if (otherE !== eNum) {
           const otherRx = new RegExp(`(?:الحلقة|حلقة)\\s*0*${otherE}(?!\\d)`, 'i');
-          if (otherRx.test(decoded)) return -999;
+          const otherRxEng = new RegExp(`\\be0*${otherE}(?!\\d)`, 'i');
+          if (otherRx.test(decoded) || otherRxEng.test(decoded)) return -999;
         }
       }
     }
@@ -363,7 +365,7 @@ const searchTitle = async (query) => {
   }
 };
 
-const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
+const scrapeEgyDeadCA = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     const results = await searchTitle(title);
     if (results.length === 0) return null;
@@ -380,11 +382,11 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     });
     
     if (!bestItem || bestScore < 10) {
-      console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
+      console.log(`EgyDeadCA: No good match found. Best score: ${bestScore}`);
       return null;
     }
     
-    console.log(`EgyDead: Best match ID=${bestItem.id} | Score=${bestScore}`);
+    console.log(`EgyDeadCA: Best match ID=${bestItem.id} | Score=${bestScore}`);
     
     const servers = [];
     const watchUrl = isTV 
@@ -433,6 +435,90 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
         language: "AR",
         quality: "1080p"
       });
+    });
+    
+    console.log(`EgyDeadCA: ${servers.length} servers found for "${title}"`);
+    return servers.length > 0 ? { provider: "CyberFlix (EgyDeadCA)", servers } : null;
+  } catch (err) {
+    console.error("EgyDeadCA Scraper Error:", err.message);
+    return null;
+  }
+};
+
+const scrapeEgyDead = async (title, year, isTV = false, season = null, episode = null) => {
+  try {
+    const searchQuery = title;
+    const searchUrl = `https://tv10.egydead.live/?s=${encodeURIComponent(searchQuery)}`;
+    
+    console.log(`Searching for '${searchQuery}' on tv10.egydead.live...`);
+    const searchResp = await flareGet(searchUrl);
+    
+    const $search = cheerio.load(searchResp.data);
+    let bestLink = null;
+    let bestScore = -999;
+    
+    $search('a').each((_, el) => {
+      const href = $search(el).attr('href');
+      if (href && (href.includes('/episode/') || href.includes('/movie/'))) {
+        const score = isTV 
+          ? scoreTVLink(href, title, season, episode)
+          : scoreMovieLink(href, title, year);
+        if (score > bestScore) {
+          bestScore = score;
+          bestLink = href;
+        }
+      }
+    });
+
+    if (!bestLink || bestScore < 10) {
+      console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
+      return null;
+    }
+    
+    console.log(`EgyDead: Found best match: ${bestLink} (Score: ${bestScore})`);
+    
+    // POST View=1 to bypass anti-bot and get servers
+    console.log(`EgyDead: POSTing View=1 to get servers...`);
+    const postResp = await flarePost(bestLink, 'View=1');
+    const $post = cheerio.load(postResp.data);
+    
+    const servers = [];
+    const seenUrls = new Set();
+    
+    // 1. Download Servers
+    $post('.donwload-servers-list li').each((_, el) => {
+      const name = $post(el).find('.ser-name').text().trim();
+      const url = $post(el).find('a.ser-link').attr('href');
+      if (url && url.startsWith('http') && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        const providerName = detectProvider(url, name);
+        servers.push({
+          name: name || `${providerName} HD`,
+          provider: providerName,
+          url,
+          type: "download",
+          language: "AR",
+          quality: "HD" 
+        });
+      }
+    });
+
+    // 2. Watch Servers
+    $post('.serversList li, ul.serversList li').each((_, el) => {
+      const url = $post(el).attr('data-link');
+      const name = $post(el).text().trim();
+      if (url && url.startsWith('http') && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        const providerName = detectProvider(url, name);
+        servers.push({
+          name: name || `${providerName} HD`,
+          provider: providerName,
+          url,
+          type: "embed",
+          language: "AR",
+          quality: "HD"
+        });
+      }
     });
     
     console.log(`EgyDead: ${servers.length} servers found for "${title}"`);
@@ -605,19 +691,24 @@ exports.getLinks = async (req, res) => {
   uniqueTitles.forEach(t => {
     scrapePromises.push(scrapeEgyDead(t, yNum, isTV, sNum, eNum));
     scrapePromises.push(scrapeTopCinema(t, yNum, isTV, sNum, eNum));
+    scrapePromises.push(scrapeEgyDeadCA(t, yNum, isTV, sNum, eNum));
   });
 
   const allScrapedResults = await Promise.all(scrapePromises);
 
   const combinedEgyDeadServers = [];
   const combinedTopCinemaServers = [];
+  const combinedEgyDeadCAServers = [];
   const seenServerKeys = new Set();
 
   for (let i = 0; i < uniqueTitles.length; i++) {
-    const egyIdx = i * 2;
-    const topIdx = i * 2 + 1;
+    const egyIdx = i * 3;
+    const topIdx = i * 3 + 1;
+    const egyCaIdx = i * 3 + 2;
+    
     const egyRes = allScrapedResults[egyIdx];
     const topRes = allScrapedResults[topIdx];
+    const egyCaRes = allScrapedResults[egyCaIdx];
     
     let foundMatchForThisTitle = false;
 
@@ -643,6 +734,17 @@ exports.getLinks = async (req, res) => {
       });
     }
 
+    if (egyCaRes && egyCaRes.provider === "CyberFlix (EgyDeadCA)") {
+      (egyCaRes.servers || []).forEach(server => {
+        const key = `${server.url}-${server.type}`;
+        if (server.url && !seenServerKeys.has(key)) {
+          seenServerKeys.add(key);
+          combinedEgyDeadCAServers.push(server);
+          foundMatchForThisTitle = true;
+        }
+      });
+    }
+
     // Stop checking fallback/alternative titles if the primary title found servers
     if (foundMatchForThisTitle) {
       break;
@@ -653,8 +755,11 @@ exports.getLinks = async (req, res) => {
   if (combinedTopCinemaServers.length > 0) {
     results.push({ provider: "TopCinema", servers: combinedTopCinemaServers });
   }
-  if (combinedEgyDeadServers.length > 0) {
-    results.push({ provider: "CyberFlix", servers: combinedEgyDeadServers });
+  
+  // Combine both EgyDead results
+  const allEgyDeadServers = [...combinedEgyDeadServers, ...combinedEgyDeadCAServers];
+  if (allEgyDeadServers.length > 0) {
+    results.push({ provider: "CyberFlix", servers: allEgyDeadServers });
   }
 
   // Inject 100% reliable free providers (VidLink, VidSrc, etc.) as the ultimate fallback
