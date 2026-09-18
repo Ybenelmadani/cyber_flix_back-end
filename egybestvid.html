@@ -50,7 +50,7 @@ $.cookie('ref_url', 'egydead.ca', { expires: 10 });
 
 <script type='text/javascript'>
   jwplayer("vplayer").setup({
-    sources: [{file:"https://s1.egybestvid.com/hls2/01/00000/hi42abfian0h_n/master.m3u8?t=3ZzyVl6HBIQl7zwvsm99AJpxNPKj4170xPqeNUt-ZgU&s=1787433283&e=50400&v=31414415&i=0.3&sp=0"}],
+    sources: [{file:"https://s1.egybestvid.com/hls2/01/00000/hi42abfian0h_n/master.m3u8?t=Ar_CObBRycFIpC5K-A3_WpUBb4R9G0eTA1liKVhuHoY&s=1788183639&e=50400&v=32996077&i=0.3&sp=0"}],
     //withCredentials: true,
     image: "https://s1.egybestvid.com/i/01/00000/hi42abfian0h.jpg",
     width: "100%", 
@@ -87,7 +87,7 @@ player.on('pause', function(x) {  });
 //player.on('all', function(x) { console.log(x); });
 player.on('bufferChange', function(x) { 
 	//console.log(x); 
-	if(x.fragNum==5) createCookieSec('vid','31414415',60*60*5);
+	if(x.fragNum==5) createCookieSec('vid','32996077',60*60*5);
 });
 
 function createCookieSec(name,value,sec) {
@@ -105,7 +105,7 @@ function doPlay(x)
 	adb=0;
 	if( window.adbon == 1 ){ adb=1; }
 	if(''!=''){
-		$.get('/dl?op=view&view_id=31414415&hash=1787433283-f09b5e2c91f059ac3e39dbf0afd8cbb0&adb='+adb, function(data) {console.log('view:'+data);} );
+		$.get('/dl?op=view&view_id=32996077&hash=1788183639-f07d60783e01ee7d66db77846c4c63f8&adb='+adb, function(data) {console.log('view:'+data);} );
 	}
 	var lastt = ls.get('tthi42abfian0h'); if(lastt>0){ jwplayer().seek( lastt ); }
 }

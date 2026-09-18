@@ -2,11 +2,12 @@ const { getLinks } = require('../controllers/scraperController');
 
 const req = {
   query: {
-    title: 'House of the Dragon',
-    year: '',
+    title: 'Mouse',
+    year: '2021',
     mediaType: 'tv',
     season: '1',
-    episode: '1'
+    episode: '1',
+    tmdbId: '117378'
   }
 };
 

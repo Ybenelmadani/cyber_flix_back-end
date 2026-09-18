@@ -83,7 +83,22 @@ function scoreMovieLink(url, title, year) {
   const decoded = decodeURIComponent(url).toLowerCase().replace(/[-_]/g, ' ');
   const cleanTitle = title.toLowerCase();
   
-  if (decoded.includes(cleanTitle)) score += 20;
+  if (decoded.includes(cleanTitle)) {
+    score += 50;
+  } else {
+    const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
+    let matchedWord = false;
+    for (const w of words) {
+      if (decoded.includes(w)) {
+        matchedWord = true;
+        break;
+      }
+    }
+    if (!matchedWord && words.length > 0) {
+      return -999; // Disqualify if no significant title word matches
+    }
+  }
+
   if (year && decoded.includes(year.toString())) score += 30;
   
   // We want to avoid assemblies/collections or TV shows
@@ -105,7 +120,21 @@ function scoreTVLink(url, title, season, episode) {
   const decoded = decodeURIComponent(url).toLowerCase().replace(/[-_]/g, ' ');
   const cleanTitle = title.toLowerCase();
   
-  if (decoded.includes(cleanTitle)) score += 30;
+  if (decoded.includes(cleanTitle)) {
+    score += 50;
+  } else {
+    const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
+    let matchedWord = false;
+    for (const w of words) {
+      if (decoded.includes(w)) {
+        matchedWord = true;
+        break;
+      }
+    }
+    if (!matchedWord && words.length > 0) {
+      return -999; // Disqualify if no significant title word matches
+    }
+  }
   
   // Avoid movies
   if (decoded.includes('فيلم') || decoded.includes('movie')) return -999;
@@ -584,26 +613,41 @@ exports.getLinks = async (req, res) => {
   const combinedTopCinemaServers = [];
   const seenServerKeys = new Set();
 
-  allScrapedResults.forEach(scrapRes => {
-    if (!scrapRes) return;
-    if (scrapRes.provider === "CyberFlix") {
-      (scrapRes.servers || []).forEach(server => {
+  for (let i = 0; i < uniqueTitles.length; i++) {
+    const egyIdx = i * 2;
+    const topIdx = i * 2 + 1;
+    const egyRes = allScrapedResults[egyIdx];
+    const topRes = allScrapedResults[topIdx];
+    
+    let foundMatchForThisTitle = false;
+
+    if (egyRes && egyRes.provider === "CyberFlix") {
+      (egyRes.servers || []).forEach(server => {
         const key = `${server.url}-${server.type}`;
         if (server.url && !seenServerKeys.has(key)) {
           seenServerKeys.add(key);
           combinedEgyDeadServers.push(server);
+          foundMatchForThisTitle = true;
         }
       });
-    } else if (scrapRes.provider === "TopCinema") {
-      (scrapRes.servers || []).forEach(server => {
+    }
+    
+    if (topRes && topRes.provider === "TopCinema") {
+      (topRes.servers || []).forEach(server => {
         const key = `${server.url}-${server.type}`;
         if (server.url && !seenServerKeys.has(key)) {
           seenServerKeys.add(key);
           combinedTopCinemaServers.push(server);
+          foundMatchForThisTitle = true;
         }
       });
     }
-  });
+
+    // Stop checking fallback/alternative titles if the primary title found servers
+    if (foundMatchForThisTitle) {
+      break;
+    }
+  }
 
   const results = [];
   if (combinedTopCinemaServers.length > 0) {

@@ -1,14 +1,19 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-async function run() {
-  const url = 'https://topcinemaa.top/?s=House+of+the+Dragon+s03e05';
-  console.log('Fetching', url);
-  try {
-    const r = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    console.log('Status', r.status);
-    console.log(r.data.substring(0, 500));
-  } catch (e) {
-    console.error(e.message);
-  }
-}
-run();
+
+axios.get('https://web.topcinemaa.live/?s=Good+Will+Hunting', {
+  headers: { 'User-Agent': 'Mozilla/5.0' }
+}).then(r => {
+  const $ = cheerio.load(r.data);
+  const titles = [];
+  $('.BlockItem').each((i, el) => titles.push($(el).find('.Title').text().trim()));
+  console.log('TopCinema:', titles);
+}).catch(console.error);
+
+axios.get('https://tv10.egydead.live/?s=Good+Will+Hunting', {
+  headers: { 'User-Agent': 'Mozilla/5.0' }
+}).then(r => {
+  console.log('EgyDead old:', r.status);
+}).catch(e => {
+  console.log('EgyDead old Error:', e.response ? e.response.status : e.message);
+});
