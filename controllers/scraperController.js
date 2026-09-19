@@ -492,6 +492,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
       if (url && url.startsWith('http') && !seenUrls.has(url)) {
         seenUrls.add(url);
         const providerName = detectProvider(url, name);
+        
         servers.push({
           name: name || `${providerName} HD`,
           provider: providerName,
@@ -500,6 +501,18 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
           language: "AR",
           quality: "HD" 
         });
+
+        const inferredType = inferScrapedSourceType(url, providerName);
+        if (inferredType === "embed" || inferredType === "mp4" || inferredType === "hls") {
+           servers.push({
+             name: name || `${providerName} HD`,
+             provider: providerName,
+             url,
+             type: inferredType,
+             language: "AR",
+             quality: "HD"
+           });
+        }
       }
     });
 
