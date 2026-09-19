@@ -616,7 +616,9 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
           
           const quality = text.includes("1080") ? "1080p" : text.includes("720") ? "720p" : text.includes("480") ? "480p" : "HD";
           
-          // All links from TopCinema's download page are download servers
+          const inferredType = inferScrapedSourceType(url, providerName);
+          
+          // Push as a download server
           servers.push({
             name: rawName || `${providerName} ${quality}`,
             provider: providerName,
@@ -625,6 +627,18 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
             language: "AR",
             quality
           });
+          
+          // If it's playable, also push it as an embed server so it shows in "Watch now"
+          if (inferredType === "embed" || inferredType === "mp4" || inferredType === "hls") {
+             servers.push({
+               name: rawName || `${providerName} ${quality}`,
+               provider: providerName,
+               url,
+               type: inferredType,
+               language: "AR",
+               quality
+             });
+          }
         }
       }
     });
