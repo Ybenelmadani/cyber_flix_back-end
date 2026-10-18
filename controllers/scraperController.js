@@ -451,15 +451,51 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     const searchUrl = `https://tv10.egydead.live/?s=${encodeURIComponent(searchQuery)}`;
     
     console.log(`Searching for '${searchQuery}' on tv10.egydead.live...`);
-    const searchResp = await flareGet(searchUrl);
+    let searchHtml = null;
+    try {
+      const res = await axios.get(searchUrl, {
+        headers: { "User-Agent": USER_AGENT },
+        timeout: 8000,
+      });
+      searchHtml = res.data;
+    } catch (axiosErr) {
+      console.log(`EgyDead axios search failed (${axiosErr.message}), trying FlareSolverr fallback...`);
+      try {
+        const searchResp = await flareGet(searchUrl);
+        searchHtml = searchResp.data;
+      } catch (fErr) {
+        console.log(`EgyDead FlareSolverr fallback failed: ${fErr.message}`);
+      }
+    }
+
+    if (!searchHtml) return null;
     
-    const $search = cheerio.load(searchResp.data);
+    const $search = cheerio.load(searchHtml);
     let bestLink = null;
     let bestScore = -999;
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && (href.includes('/episode/') || href.includes('/movie/'))) {
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+      
+      let candidate = false;
+      if (isTV) {
+        if (href.includes('/episode/')) candidate = true;
+      } else {
+        if (
+          !href.includes('/category/') &&
+          !href.includes('/series-category/') &&
+          !href.includes('/page/') &&
+          !href.includes('/assembly/') &&
+          !href.includes('/season/') &&
+          !href.includes('/episode/') &&
+          !href.includes('/tag/')
+        ) {
+          candidate = true;
+        }
+      }
+
+      if (candidate) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
@@ -477,10 +513,31 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     
     console.log(`EgyDead: Found best match: ${bestLink} (Score: ${bestScore})`);
     
-    // POST View=1 to bypass anti-bot and get servers
+    // POST View=1 to bypass anti-bot and get servers (axios first, flarePost fallback)
     console.log(`EgyDead: POSTing View=1 to get servers...`);
-    const postResp = await flarePost(bestLink, 'View=1');
-    const $post = cheerio.load(postResp.data);
+    let postHtml = null;
+    try {
+      const postRes = await axios.post(bestLink, 'View=1', {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Referer': bestLink,
+        },
+        timeout: 8000,
+      });
+      postHtml = postRes.data;
+    } catch (postAxiosErr) {
+      console.log(`EgyDead axios POST failed (${postAxiosErr.message}), trying flarePost fallback...`);
+      try {
+        const postResp = await flarePost(bestLink, 'View=1');
+        postHtml = postResp.data;
+      } catch (fErr) {
+        console.log(`EgyDead flarePost fallback failed: ${fErr.message}`);
+      }
+    }
+
+    if (!postHtml) return null;
+    const $post = cheerio.load(postHtml);
     
     const servers = [];
     const seenUrls = new Set();
@@ -489,28 +546,31 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     $post('.donwload-servers-list li').each((_, el) => {
       const name = $post(el).find('.ser-name').text().trim();
       const url = $post(el).find('a.ser-link').attr('href');
+      const qualityText = $post(el).find('.server-info').text().trim().toLowerCase();
+      const quality = qualityText.includes('1080') ? '1080p' : qualityText.includes('720') ? '720p' : qualityText.includes('480') ? '480p' : 'HD';
+
       if (url && url.startsWith('http') && !seenUrls.has(url)) {
         seenUrls.add(url);
         const providerName = detectProvider(url, name);
         
         servers.push({
-          name: name || `${providerName} HD`,
+          name: name || `${providerName} ${quality}`,
           provider: providerName,
           url,
           type: "download",
           language: "AR",
-          quality: "HD" 
+          quality 
         });
 
         const inferredType = inferScrapedSourceType(url, providerName);
         if (inferredType === "embed" || inferredType === "mp4" || inferredType === "hls") {
            servers.push({
-             name: name || `${providerName} HD`,
+             name: name || `${providerName} ${quality}`,
              provider: providerName,
              url,
              type: inferredType,
              language: "AR",
-             quality: "HD"
+             quality
            });
         }
       }
@@ -551,7 +611,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     const searchUrl = `https://topcinemaa.live/?s=${encodeURIComponent(searchQuery)}`;
     const { data: searchHtml } = await axios
       .get(searchUrl, SCRAPER_REQUEST_OPTIONS)
-      .catch(() => axios.get(`https://topcinma.com/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
+      .catch(() => axios.get(`https://web2.topcinema.io/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
     
     const $search = cheerio.load(searchHtml);
     let bestLink = null;
@@ -559,7 +619,7 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     
     $search('a').each((_, el) => {
       const href = $search(el).attr('href');
-      if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema') || href.includes('topcinemaa.live/'))) {
+      if (href && (href.includes('topcinema') || href.includes('topcinma'))) {
         const score = isTV 
           ? scoreTVLink(href, title, season, episode)
           : scoreMovieLink(href, title, year);
@@ -576,11 +636,11 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
         const searchPage2Url = `https://topcinemaa.live/page/2/?s=${encodeURIComponent(searchQuery)}`;
         const { data: page2Html } = await axios
           .get(searchPage2Url, SCRAPER_REQUEST_OPTIONS)
-          .catch(() => axios.get(`https://topcinma.com/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
+          .catch(() => axios.get(`https://web2.topcinema.io/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
         const $page2 = cheerio.load(page2Html);
         $page2('a').each((_, el) => {
           const href = $page2(el).attr('href');
-          if (href && (href.includes('topcinemaa.top/') || href.includes('web.topcinemaa.com/') || href.includes('topcinma') || href.includes('topcinema') || href.includes('topcinemaa.live/'))) {
+          if (href && (href.includes('topcinema') || href.includes('topcinma'))) {
             const score = scoreTVLink(href, title, season, episode);
             if (score > bestScore) {
               bestScore = score;

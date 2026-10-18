@@ -10,13 +10,13 @@ async function flareGet(url, options = {}) {
   const payload = {
     cmd: 'request.get',
     url,
-    maxTimeout: 60000,
+    maxTimeout: 8000,
     ...(options.cookies ? { cookies: options.cookies } : {}),
   };
 
   const res = await axios.post(FLARESOLVERR_URL, payload, {
     headers: { 'Content-Type': 'application/json' },
-    timeout: 70000,
+    timeout: 9000,
   });
 
   const solution = res.data?.solution;
@@ -37,13 +37,13 @@ async function flarePost(url, postData, options = {}) {
     cmd: 'request.post',
     url,
     postData,
-    maxTimeout: 60000,
+    maxTimeout: 8000,
     ...(options.cookies ? { cookies: options.cookies } : {}),
   };
 
   const res = await axios.post(FLARESOLVERR_URL, payload, {
     headers: { 'Content-Type': 'application/json' },
-    timeout: 70000,
+    timeout: 9000,
   });
 
   const solution = res.data?.solution;
