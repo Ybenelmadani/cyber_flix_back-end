@@ -608,10 +608,10 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
 const scrapeTopCinema = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     let searchQuery = title;
-    const searchUrl = `https://topcinemaa.live/?s=${encodeURIComponent(searchQuery)}`;
+    const searchUrl = `https://web2.topcinema.io/?s=${encodeURIComponent(searchQuery)}`;
     const { data: searchHtml } = await axios
       .get(searchUrl, SCRAPER_REQUEST_OPTIONS)
-      .catch(() => axios.get(`https://web2.topcinema.io/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
+      .catch(() => axios.get(`https://topcinemaa.live/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
     
     const $search = cheerio.load(searchHtml);
     let bestLink = null;
@@ -633,10 +633,10 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     // If TV show episode is not on page 1, check page 2 of search results
     if (isTV && (!bestLink || bestScore < 10)) {
       try {
-        const searchPage2Url = `https://topcinemaa.live/page/2/?s=${encodeURIComponent(searchQuery)}`;
+        const searchPage2Url = `https://web2.topcinema.io/page/2/?s=${encodeURIComponent(searchQuery)}`;
         const { data: page2Html } = await axios
           .get(searchPage2Url, SCRAPER_REQUEST_OPTIONS)
-          .catch(() => axios.get(`https://web2.topcinema.io/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
+          .catch(() => axios.get(`https://topcinemaa.live/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
         const $page2 = cheerio.load(page2Html);
         $page2('a').each((_, el) => {
           const href = $page2(el).attr('href');
@@ -832,8 +832,8 @@ exports.getLinks = async (req, res) => {
       });
     }
 
-    // Stop checking fallback/alternative titles if the primary title found servers
-    if (foundMatchForThisTitle) {
+    // Stop checking further titles if both TopCinema and EgyDead found servers
+    if (combinedTopCinemaServers.length > 0 && (combinedEgyDeadServers.length > 0 || combinedEgyDeadCAServers.length > 0)) {
       break;
     }
   }
