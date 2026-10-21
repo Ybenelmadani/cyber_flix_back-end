@@ -151,7 +151,7 @@ function scoreTVLink(url, title, season, episode) {
       if (otherS !== sNum) {
         const otherRegexes = [
           new RegExp(`(?:الموسم|موسم)\\s*0*${otherS}(?!\\d)`, 'i'),
-          new RegExp(`\\bs0*${otherS}(?!\\d)`, 'i'),
+          new RegExp(`(?:s|season)\\s*0*${otherS}(?!\\d)`, 'i'),
         ];
         if (arabicNumbers[otherS]) {
           arabicNumbers[otherS].forEach(term => {
@@ -166,8 +166,7 @@ function scoreTVLink(url, title, season, episode) {
 
     const seasonRegexes = [
       new RegExp(`(?:الموسم|موسم)\\s*0*${sNum}(?!\\d)`, 'i'),
-      new RegExp(`\\bs0*${sNum}(?!\\d)`, 'i'),
-      new RegExp(`\\bseason\\s*0*${sNum}(?!\\d)`, 'i'),
+      new RegExp(`(?:s|season)\\s*0*${sNum}(?!\\d)`, 'i'),
     ];
     if (arabicNumbers[sNum]) {
       arabicNumbers[sNum].forEach(term => {
@@ -183,8 +182,7 @@ function scoreTVLink(url, title, season, episode) {
     const eNum = Number(episode);
     const episodeRegexes = [
       new RegExp(`(?:الحلقة|حلقة)\\s*0*${eNum}(?!\\d)`, 'i'),
-      new RegExp(`\\be0*${eNum}(?!\\d)`, 'i'),
-      new RegExp(`\\bepisode\\s*0*${eNum}(?!\\d)`, 'i'),
+      new RegExp(`(?:e|episode)\\s*0*${eNum}(?!\\d)`, 'i'),
     ];
     if (arabicNumbers[eNum]) {
       arabicNumbers[eNum].forEach(term => {
@@ -199,7 +197,7 @@ function scoreTVLink(url, title, season, episode) {
       for (let otherE = 1; otherE <= 30; otherE++) {
         if (otherE !== eNum) {
           const otherRx = new RegExp(`(?:الحلقة|حلقة)\\s*0*${otherE}(?!\\d)`, 'i');
-          const otherRxEng = new RegExp(`\\be0*${otherE}(?!\\d)`, 'i');
+          const otherRxEng = new RegExp(`(?:e|episode)\\s*0*${otherE}(?!\\d)`, 'i');
           if (otherRx.test(decoded) || otherRxEng.test(decoded)) return -999;
         }
       }
@@ -608,9 +606,10 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
 const scrapeTopCinema = async (title, year, isTV = false, season = null, episode = null) => {
   try {
     let searchQuery = title;
-    const searchUrl = `https://web2.topcinema.io/?s=${encodeURIComponent(searchQuery)}`;
+    const searchUrl = `https://topcinema.film/search/?query=${encodeURIComponent(searchQuery)}&type=all`;
     const { data: searchHtml } = await axios
-      .get(searchUrl, SCRAPER_REQUEST_OPTIONS)
+      .get(searchUrl, { ...SCRAPER_REQUEST_OPTIONS, headers: { ...SCRAPER_REQUEST_OPTIONS.headers, Referer: 'https://topcinema.film/' } })
+      .catch(() => axios.get(`https://web2.topcinema.io/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS))
       .catch(() => axios.get(`https://topcinemaa.live/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
     
     const $search = cheerio.load(searchHtml);
@@ -633,9 +632,10 @@ const scrapeTopCinema = async (title, year, isTV = false, season = null, episode
     // If TV show episode is not on page 1, check page 2 of search results
     if (isTV && (!bestLink || bestScore < 10)) {
       try {
-        const searchPage2Url = `https://web2.topcinema.io/page/2/?s=${encodeURIComponent(searchQuery)}`;
+        const searchPage2Url = `https://topcinema.film/page/2/search/?query=${encodeURIComponent(searchQuery)}&type=all`;
         const { data: page2Html } = await axios
-          .get(searchPage2Url, SCRAPER_REQUEST_OPTIONS)
+          .get(searchPage2Url, { ...SCRAPER_REQUEST_OPTIONS, headers: { ...SCRAPER_REQUEST_OPTIONS.headers, Referer: 'https://topcinema.film/' } })
+          .catch(() => axios.get(`https://web2.topcinema.io/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS))
           .catch(() => axios.get(`https://topcinemaa.live/page/2/?s=${encodeURIComponent(searchQuery)}`, SCRAPER_REQUEST_OPTIONS));
         const $page2 = cheerio.load(page2Html);
         $page2('a').each((_, el) => {
