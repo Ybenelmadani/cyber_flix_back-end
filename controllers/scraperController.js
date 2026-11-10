@@ -253,6 +253,144 @@ const parseBootstrapData = (html) => {
   return null;
 };
 
+// --- EgyDead URL helpers for the current (nested) TV structure -------------
+// The site now nests TV episodes three levels deep:
+//   search -> /Series/<show>/  ->  /seasons/<show>-sNN/  ->  /episodes/<show>-sNNeNN/
+// Movie links still appear directly in search results, so only TV needs this chain.
+
+const normEgyUrl = (s) =>
+  decodeURIComponent(String(s || "")).toLowerCase().replace(/[-_]/g, " ");
+
+const egyUrlHasSeason = (url, sNum) => {
+  const d = normEgyUrl(url);
+  if (new RegExp(`(?:^|[\\s/.-])s0*${sNum}(?!\\d)`, "i").test(d)) return true;
+  if (new RegExp(`season\\s*0*${sNum}(?!\\d)`, "i").test(d)) return true;
+  return false;
+};
+
+const egyUrlHasEpisode = (url, sNum, eNum) => {
+  const d = normEgyUrl(url);
+  return new RegExp(`s0*${sNum}e0*${eNum}(?!\\d)`, "i").test(d);
+};
+
+const egyTitleInUrl = (url, title) => {
+  const d = normEgyUrl(url);
+  const t = normEgyUrl(title);
+  if (d.includes(t)) return true;
+  const words = t.split(/\s+/).filter((w) => w.length > 2);
+  return words.length > 0 && words.every((w) => d.includes(w));
+};
+
+// Real content links (not the generic /episode/ or /seasons/ index pages)
+const isRealEgyEpisodeLink = (href) =>
+  /\/episodes?\//.test(href) &&
+  !href.endsWith("/episode/") &&
+  !href.endsWith("/episodes/");
+
+const isRealEgySeasonLink = (href) =>
+  /\/seasons?\//.test(href) &&
+  !href.includes("/series-category/") &&
+  !href.endsWith("/seasons/") &&
+  !href.endsWith("/season/");
+
+const isRealEgySeriesLink = (href) =>
+  /\/series\//i.test(href) && !href.includes("/series-category/");
+
+// Fetch an EgyDead page with axios, falling back to FlareSolverr for Cloudflare pages.
+const fetchEgyPage = async (url) => {
+  try {
+    const res = await axios.get(url, {
+      headers: { "User-Agent": USER_AGENT },
+      timeout: 8000,
+    });
+    return res.data;
+  } catch (axiosErr) {
+    try {
+      const resp = await flareGet(url);
+      return resp.data;
+    } catch (fErr) {
+      console.log(`EgyDead fetch failed (${url}): ${fErr.message}`);
+      return null;
+    }
+  }
+};
+
+/**
+ * Resolve a TV episode page URL on the current EgyDead structure.
+ *   search -> /Series/<show>/ -> /seasons/<show>-sNN/ -> /episodes/<show>-sNNeNN/
+ * Direct episode/season hits in the search results are used as fast paths.
+ * Returns the final episode page URL, or null.
+ */
+const resolveEgyDeadEpisodeUrl = async (searchHtml, title, season, episode) => {
+  const sNum = Number(season);
+  const eNum = Number(episode);
+  const $search = cheerio.load(searchHtml);
+
+  const seriesLinks = [];
+  const seasonLinks = [];
+  const episodeLinks = [];
+  $search("a").each((_, el) => {
+    const href = $search(el).attr("href");
+    if (!href || !href.includes("egydead")) return;
+    if (isRealEgyEpisodeLink(href)) episodeLinks.push(href);
+    else if (isRealEgySeasonLink(href)) seasonLinks.push(href);
+    else if (isRealEgySeriesLink(href)) seriesLinks.push(href);
+  });
+
+  const uniqEpisodeLinks = [...new Set(episodeLinks)];
+  const uniqSeasonLinks = [...new Set(seasonLinks)];
+  const uniqSeriesLinks = [...new Set(seriesLinks)];
+
+  // A) Direct episode link in search results matching SxxExx
+  const directEp = uniqEpisodeLinks.find((h) => egyUrlHasEpisode(h, sNum, eNum));
+  if (directEp) {
+    console.log(`EgyDead: direct episode match in search: ${directEp}`);
+    return directEp;
+  }
+
+  // B) Direct season link in search results matching the requested season
+  let seasonUrl = uniqSeasonLinks.find(
+    (h) => egyTitleInUrl(h, title) && egyUrlHasSeason(h, sNum)
+  );
+  if (seasonUrl) console.log(`EgyDead: direct season match in search: ${seasonUrl}`);
+
+  // C) Series page -> find the requested season
+  if (!seasonUrl) {
+    let seriesUrl = uniqSeriesLinks.find((h) => egyTitleInUrl(h, title));
+    if (!seriesUrl && uniqSeriesLinks.length) seriesUrl = uniqSeriesLinks[0];
+    if (seriesUrl) {
+      console.log(`EgyDead: fetching series page: ${seriesUrl}`);
+      const seriesHtml = await fetchEgyPage(seriesUrl);
+      if (seriesHtml) {
+        const $series = cheerio.load(seriesHtml);
+        const found = [];
+        $series("a").each((_, el) => {
+          const h = $series(el).attr("href");
+          if (h && isRealEgySeasonLink(h)) found.push(h);
+        });
+        seasonUrl = [...new Set(found)].find((h) => egyUrlHasSeason(h, sNum));
+        if (seasonUrl) console.log(`EgyDead: season from series page: ${seasonUrl}`);
+      }
+    }
+  }
+
+  if (!seasonUrl) return null;
+
+  // D) Season page -> find the requested episode
+  console.log(`EgyDead: fetching season page: ${seasonUrl}`);
+  const seasonHtml = await fetchEgyPage(seasonUrl);
+  if (!seasonHtml) return null;
+  const $season = cheerio.load(seasonHtml);
+  const found = [];
+  $season("a").each((_, el) => {
+    const h = $season(el).attr("href");
+    if (h && isRealEgyEpisodeLink(h)) found.push(h);
+  });
+  const epUrl = [...new Set(found)].find((h) => egyUrlHasEpisode(h, sNum, eNum));
+  if (epUrl) console.log(`EgyDead: episode from season page: ${epUrl}`);
+  return epUrl || null;
+};
+
 function detectProvider(url, name) {
   const urlLower = String(url || "").toLowerCase();
   const nameLower = String(name || "").toLowerCase();
@@ -447,7 +585,7 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
   try {
     const searchQuery = title;
     const searchUrl = `https://tv10.egydead.live/?s=${encodeURIComponent(searchQuery)}`;
-    
+
     console.log(`Searching for '${searchQuery}' on tv10.egydead.live...`);
     let searchHtml = null;
     try {
@@ -467,19 +605,27 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
     }
 
     if (!searchHtml) return null;
-    
-    const $search = cheerio.load(searchHtml);
+
     let bestLink = null;
     let bestScore = -999;
-    
-    $search('a').each((_, el) => {
-      const href = $search(el).attr('href');
-      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
-      
-      let candidate = false;
-      if (isTV) {
-        if (href.includes('/episode/')) candidate = true;
-      } else {
+
+    // TV episodes require multi-level navigation (search -> series -> season -> episode)
+    if (isTV) {
+      bestLink = await resolveEgyDeadEpisodeUrl(searchHtml, title, season, episode);
+      if (!bestLink) {
+        console.log(`EgyDead: No TV episode found for S${season}E${episode}`);
+        return null;
+      }
+      bestScore = 100; // resolved, no scoring needed
+      console.log(`EgyDead: Resolved TV episode: ${bestLink}`);
+    } else {
+      // Movies still appear directly in search results
+      const $search = cheerio.load(searchHtml);
+      $search('a').each((_, el) => {
+        const href = $search(el).attr('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+        let candidate = false;
         if (
           !href.includes('/category/') &&
           !href.includes('/series-category/') &&
@@ -491,25 +637,23 @@ const scrapeEgyDead = async (title, year, isTV = false, season = null, episode =
         ) {
           candidate = true;
         }
-      }
 
-      if (candidate) {
-        const score = isTV 
-          ? scoreTVLink(href, title, season, episode)
-          : scoreMovieLink(href, title, year);
-        if (score > bestScore) {
-          bestScore = score;
-          bestLink = href;
+        if (candidate) {
+          const score = scoreMovieLink(href, title, year);
+          if (score > bestScore) {
+            bestScore = score;
+            bestLink = href;
+          }
         }
-      }
-    });
+      });
 
-    if (!bestLink || bestScore < 10) {
-      console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
-      return null;
+      if (!bestLink || bestScore < 10) {
+        console.log(`EgyDead: No good match found. Best score: ${bestScore}`);
+        return null;
+      }
+
+      console.log(`EgyDead: Found best match: ${bestLink} (Score: ${bestScore})`);
     }
-    
-    console.log(`EgyDead: Found best match: ${bestLink} (Score: ${bestScore})`);
     
     // POST View=1 to bypass anti-bot and get servers (axios first, flarePost fallback)
     console.log(`EgyDead: POSTing View=1 to get servers...`);
