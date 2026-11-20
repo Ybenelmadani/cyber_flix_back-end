@@ -914,8 +914,10 @@ exports.getLinks = async (req, res) => {
     }
   }
 
-  // Prioritize primary title first and limit to max 3 unique titles to stay within Vercel timeout
-  const uniqueTitles = Array.from(titlesToSearch).slice(0, 3);
+  // FlareSolverr launches Chromium and the free Render instance has 512 MB RAM.
+  // TV requests use one primary title to avoid launching several browsers at once.
+  // Movies can still use title variants because they do not need the nested TV flow.
+  const uniqueTitles = Array.from(titlesToSearch).slice(0, isTV ? 1 : 3);
   console.log(`Scraper querying EgyDead & TopCinema for titles: ${JSON.stringify(uniqueTitles)}`);
 
   const scrapePromises = [];
